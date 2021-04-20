@@ -21,26 +21,25 @@ type Server struct {
 	Log            *log.Entry
 	WpadFile       string
 	ReverseProxies map[string]httputil.ReverseProxy
-	Proxy *ProxyServer
+	Proxy          *ProxyServer
 }
 
 func (d Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ip, port := utils.GetConnection(r.RemoteAddr)
 	logger := d.Log.WithFields(log.Fields{
-		"src":          ip.String(),
-		"src_port":     port,
-		"subcomponent": "request",
-		"http_method":       r.Method,
-		"uri_path":     r.URL.Path,
-		"url":          r.URL.String(),
+		"src":         ip.String(),
+		"src_port":    port,
+		"http_method": r.Method,
+		"uri_path":    r.URL.Path,
+		"url":         r.URL.String(),
 	})
 	proxy, ok := d.ReverseProxies[r.Host]
 	if ok {
 		logger = logger.WithFields(log.Fields{
-			"subcomponent": "reverse",
-			"host":         r.Host,
+			"component": "reverse",
+			"host":      r.Host,
 		})
-		logger.Debug("reverse proxying")
+		logger.Info("reverse proxying")
 		proxy.ErrorHandler = func(writer http.ResponseWriter, request *http.Request, err error) {
 			logger.Errorf("error with reverse proxy: %s", err)
 			writer.WriteHeader(http.StatusBadGateway)
@@ -51,9 +50,9 @@ func (d Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "GET" {
 		if WpadPaths[r.URL.Path] {
 			logger.WithFields(log.Fields{
-				"subcomponent": "wpad",
-				"status":       200,
-			}).Debugf("WPAD request %s", r.URL.Path)
+				"component": "wpad",
+				"status":    200,
+			}).Infof("WPAD request %s", r.URL.Path)
 			w.Header().Set("Content-Type", "application/x-ns-proxy-autoconfig")
 			_, _ = fmt.Fprint(w, d.WpadFile)
 		} else {

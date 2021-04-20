@@ -50,41 +50,49 @@ func NewProxy(iface configuration.InterfaceConfig, logger *log.Entry) (*ProxySer
 	proxy.OnResponse().DoFunc(func(resp *http.Response, ctx *goproxy.ProxyCtx) *http.Response {
 		ip, port := utils.GetConnection(ctx.Req.RemoteAddr)
 		requestLogger := proxyLogger.WithFields(log.Fields{
-			"src":         ip.String(),
-			"src_port":    port,
-			"http_method": ctx.Req.Method,
-			"uri_path":    ctx.Req.URL.Path,
-			"url":         ctx.Req.URL.String(),
-			"status":      ctx.Resp.StatusCode,
-			"action":      "pass",
+			"src":             ip.String(),
+			"src_port":        port,
+			"http_method":     ctx.Req.Method,
+			"uri_path":        ctx.Req.URL.Path,
+			"url":             ctx.Req.URL.String(),
+			"http_user_agent": ctx.Req.Header.Get("User-Agent"),
+			"http_referrer":   ctx.Req.Header.Get("Referer"),
+			"action":          "pass",
 		})
-		requestLogger.Debugf("Proxy request")
+		if ctx.Resp != nil {
+			requestLogger = requestLogger.WithFields(log.Fields{
+				"status": ctx.Resp.StatusCode,
+			})
+		}
+		requestLogger.Info("Proxy request")
 		return resp
 	})
 	proxy.OnRequest().HandleConnectFunc(func(host string, ctx *goproxy.ProxyCtx) (*goproxy.ConnectAction, string) {
 		ip, port := utils.GetConnection(ctx.Req.RemoteAddr)
-		host_parts := strings.Split(host, ":")
-		dest_port := "443"
-		dest_host := host
-		if len(host_parts) == 2 {
-			dest_host = host_parts[0]
-			dest_port = host_parts[1]
+		hostParts := strings.Split(host, ":")
+		destPort := "443"
+		destHost := host
+		if len(hostParts) == 2 {
+			destHost = hostParts[0]
+			destPort = hostParts[1]
 		}
 		url := ctx.Req.URL.String()
 		if len(url) > 0 && !strings.HasPrefix(url, "http") {
 			url = fmt.Sprintf("https:%s", url)
 		}
 		requestLogger := proxyLogger.WithFields(log.Fields{
-			"src":         ip.String(),
-			"src_port":    port,
-			"http_method": ctx.Req.Method,
-			"uri_path":    ctx.Req.URL.Path,
-			"url":         url,
-			"dest":        dest_host,
-			"dest_port":   dest_port,
-			"action":      "tunnel",
+			"src":             ip.String(),
+			"src_port":        port,
+			"http_method":     ctx.Req.Method,
+			"uri_path":        ctx.Req.URL.Path,
+			"url":             url,
+			"dest":            destHost,
+			"dest_port":       destPort,
+			"http_user_agent": ctx.Req.Header.Get("User-Agent"),
+			"http_referrer":   ctx.Req.Header.Get("Referer"),
+			"action":          "tunnel",
 		})
-		requestLogger.Debugf("Connect request")
+		requestLogger.Info("Connect request")
 		return goproxy.OkConnect, host
 	})
 	proxy.Logger = proxyLogger
