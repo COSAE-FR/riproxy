@@ -11,7 +11,7 @@ import (
 )
 
 type Config struct {
-	File string `usage:"configuration file" default:"ripvutils.yml"`
+	File string `usage:"configuration file" default:"riproxy.yml"`
 }
 
 type Daemon struct {
@@ -38,14 +38,13 @@ func (d Daemon) Stop() error {
 
 func New(cfg Config) (*Daemon, error) {
 	config, err := configuration.New(cfg.File, false)
-	config.Log.Debugf("%+v", config)
 	if err != nil {
 		return nil, err
 	}
 	daemon := Daemon{Configuration: config}
 	for _, iface := range daemon.Configuration.Interfaces {
 		logger := daemon.Configuration.Log.WithFields(log.Fields{
-			"app":       "ripvutils",
+			"app":       utils.Name,
 			"version":   utils.Version,
 			"component": "server",
 			"interface": iface.Name,
@@ -69,22 +68,22 @@ func main() {
 	})
 	log.SetOutput(os.Stderr)
 	logger := log.WithFields(log.Fields{
-		"app":       "ripvutils",
+		"app":       utils.Name,
 		"component": "main",
 	})
 	cfg := Config{}
 
 	configurator := &easyconfig.Configurator{
-		ProgramName: "ripvutils",
+		ProgramName: utils.Name,
 	}
 
 	err := easyconfig.Parse(configurator, &cfg)
 	if err != nil {
 		logger.Fatalf("%v", err)
 	}
-	logger.Debugf("Started with %#v", cfg)
+	logger.Debugf("Starting %s daemon", utils.Name)
 	service.Main(&service.Info{
-		Name:      "ripvutils",
+		Name:      utils.Name,
 		AllowRoot: true,
 		NewFunc: func() (service.Runnable, error) {
 			return New(cfg)

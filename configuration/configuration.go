@@ -55,7 +55,7 @@ type InterfaceConfig struct {
 	Proxy          string
 	ProxyIP        net.IP      `yaml:"-" json:"-"`
 	ProxyPort      uint16      `yaml:"-" json:"-"`
-	EnableProxy    bool      `yaml:"-" json:"-"`
+	EnableProxy    bool        `yaml:"-" json:"-"`
 	NetworkStrings []string    `yaml:"networks" json:"networks"`
 	Networks       []net.IPNet `yaml:"-" json:"-"`
 	Regexp         []string
@@ -125,7 +125,7 @@ func (c *Configuration) setUpLog() {
 	}
 	log.SetLevel(logLevel)
 	logger := log.WithFields(log.Fields{
-		"app":       "ripvutils",
+		"app":       utils.Name,
 		"component": "config_loader",
 		"version":   utils.Version,
 	})
