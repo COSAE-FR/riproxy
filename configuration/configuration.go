@@ -88,8 +88,15 @@ func (i *InterfaceConfig) check(log *log.Entry) error {
 	for _, netString := range i.NetworkStrings {
 		_, network, err := net.ParseCIDR(netString)
 		if err != nil {
-			log.Errorf("cannot parse network: %s'%s'", netString, err)
-			continue
+			ip, err := utils.GetIPForInterface(netString)
+			if err != nil {
+				log.Errorf("cannot parse network: %s'%s'", netString, err)
+				continue
+			}
+			_, network, err = net.ParseCIDR(ip.String())
+			if err != nil {
+				network = ip
+			}
 		}
 		i.Networks = append(i.Networks, *network)
 	}
