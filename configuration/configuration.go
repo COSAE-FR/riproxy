@@ -48,18 +48,19 @@ func (p *ReverseConfig) check(log *log.Entry, name string, iface string, port ui
 }
 
 type InterfaceConfig struct {
-	Name           string
-	Bind           string
-	BindIP         net.IP `yaml:"-" json:"-"`
-	BindPort       uint16 `yaml:"-" json:"-"`
-	Proxy          string
-	ProxyIP        net.IP      `yaml:"-" json:"-"`
-	ProxyPort      uint16      `yaml:"-" json:"-"`
-	EnableProxy    bool        `yaml:"-" json:"-"`
-	NetworkStrings []string    `yaml:"networks" json:"networks"`
-	Networks       []net.IPNet `yaml:"-" json:"-"`
-	Regexp         []string
-	ReverseProxy   map[string]ReverseConfig `yaml:"reverse_proxy" json:"reverse_proxy"`
+	Name                   string
+	Bind                   string
+	BindIP                 net.IP `yaml:"-" json:"-"`
+	BindPort               uint16 `yaml:"-" json:"-"`
+	Proxy                  string
+	ProxyIP                net.IP      `yaml:"-" json:"-"`
+	ProxyPort              uint16      `yaml:"-" json:"-"`
+	EnableProxy            bool        `yaml:"-" json:"-"`
+	NetworkStrings         []string    `yaml:"networks" json:"networks"`
+	InterfaceNetworkDirect bool        `yaml:"interface_direct" json:"interface_direct"`
+	Networks               []net.IPNet `yaml:"-" json:"-"`
+	Regexp                 []string
+	ReverseProxy           map[string]ReverseConfig `yaml:"reverse_proxy" json:"reverse_proxy"`
 }
 
 func (i *InterfaceConfig) check(log *log.Entry) error {
@@ -99,6 +100,12 @@ func (i *InterfaceConfig) check(log *log.Entry) error {
 			}
 		}
 		i.Networks = append(i.Networks, *network)
+	}
+	if i.InterfaceNetworkDirect {
+		_, network, err := net.ParseCIDR(interfaceIP.String())
+		if err == nil {
+			i.Networks = append(i.Networks, *network)
+		}
 	}
 	proxies := make(map[string]ReverseConfig)
 	if len(i.ReverseProxy) > 0 {
