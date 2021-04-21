@@ -63,6 +63,11 @@ func NewProxy(iface configuration.InterfaceConfig, logger *log.Entry) (*ProxySer
 			requestLogger = requestLogger.WithFields(log.Fields{
 				"status": ctx.Resp.StatusCode,
 			})
+		} else {
+			requestLogger.WithFields(log.Fields{
+				"action": "error",
+			}).Error("Proxy request: no response")
+			return resp
 		}
 		requestLogger.Info("Proxy request")
 		return resp
@@ -77,7 +82,7 @@ func NewProxy(iface configuration.InterfaceConfig, logger *log.Entry) (*ProxySer
 			destPort = hostParts[1]
 		}
 		url := ctx.Req.URL.String()
-		if len(url) > 0 && !strings.HasPrefix(url, "http") {
+		if len(url) > 0 && !strings.HasPrefix(url, "https") {
 			url = fmt.Sprintf("https:%s", url)
 		}
 		requestLogger := proxyLogger.WithFields(log.Fields{
