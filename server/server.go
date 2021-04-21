@@ -71,9 +71,14 @@ func (d Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (d *Server) Start() error {
 	d.Log.Debug("starting HTTP daemon")
-	go d.Http.Serve(d.Listener)
+	go func() {
+		err := d.Http.Serve(d.Listener)
+		if err != http.ErrServerClosed {
+			d.Log.Debugf("HTTP server stopped with error: %s", err)
+		}
+	}()
 	if d.Interface.EnableProxy && d.Proxy != nil {
-		d.Proxy.Start()
+		_ = d.Proxy.Start()
 	}
 	return nil
 }
@@ -84,12 +89,15 @@ func (d Server) Stop() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err = d.Http.Shutdown(ctx); err != nil {
-		d.Log.Errorf("shutdown error: %v", err)
+		d.Log.Errorf("HTTP server shutdown error: %v", err)
 	} else {
-		d.Log.Debug("gracefully stopped")
+		d.Log.Debug("HTTP server gracefully stopped")
 	}
 	if d.Interface.EnableProxy && d.Proxy != nil {
-		d.Proxy.Stop()
+		err = d.Proxy.Stop()
+		if err != nil {
+			d.Log.Errorf("proxy server shutdown error: %s", err)
+		}
 	}
 	return err
 }

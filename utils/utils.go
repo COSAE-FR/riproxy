@@ -10,8 +10,8 @@ func GetIPForInterface(interfaceName string) (ipAddress *net.IPNet, err error) {
 	interfaces, _ := net.Interfaces()
 	for _, inter := range interfaces {
 		if inter.Name == interfaceName {
-			if addrs, err := inter.Addrs(); err == nil {
-				for _, addr := range addrs {
+			if addresses, err := inter.Addrs(); err == nil {
+				for _, addr := range addresses {
 					switch ip := addr.(type) {
 					case *net.IPNet:
 						if ip.IP.To4() != nil {

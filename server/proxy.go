@@ -23,21 +23,25 @@ type ProxyServer struct {
 
 func (p ProxyServer) Start() error {
 	p.Log.Debug("starting HTTP Proxy daemon")
-	go p.Http.Serve(p.Listener)
+	go func() {
+		err := p.Http.Serve(p.Listener)
+		if err != http.ErrServerClosed {
+			p.Log.Debugf("proxy server stopped with error: %s", err)
+		}
+	}()
 	return nil
 }
 
 func (p ProxyServer) Stop() error {
-	var err error
 	p.Log.Debugf("stopping HTTP Proxy daemon")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if err = p.Http.Shutdown(ctx); err != nil {
-		p.Log.Errorf("shutdown error: %v", err)
+	if err := p.Http.Shutdown(ctx); err != nil {
+		return err
 	} else {
 		p.Log.Debug("gracefully stopped")
 	}
-	return err
+	return nil
 }
 
 func NewProxy(iface configuration.InterfaceConfig, logger *log.Entry) (*ProxyServer, error) {

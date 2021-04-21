@@ -57,7 +57,7 @@ type InterfaceConfig struct {
 	ProxyPort              uint16      `yaml:"-" json:"-"`
 	EnableProxy            bool        `yaml:"-" json:"-"`
 	NetworkStrings         []string    `yaml:"networks" json:"networks"`
-	InterfaceNetworkDirect bool        `yaml:"interface_direct" json:"interface_direct"`
+	InterfaceNetworkDirect bool        `yaml:"direct" json:"direct"`
 	Networks               []net.IPNet `yaml:"-" json:"-"`
 	Regexp                 []string
 	ReverseProxy           map[string]ReverseConfig `yaml:"reverse_proxy" json:"reverse_proxy"`
@@ -176,7 +176,9 @@ func (c *Configuration) readJson() error {
 	if err != nil {
 		return err
 	}
-	defer jsonFile.Close()
+	defer func() {
+		_ = jsonFile.Close()
+	}()
 	byteValue, err := ioutil.ReadAll(jsonFile)
 	if err != nil {
 		return err
@@ -185,12 +187,14 @@ func (c *Configuration) readJson() error {
 }
 
 func (c *Configuration) readYaml() error {
-	jsonFile, err := os.Open(c.path)
+	yamlFile, err := os.Open(c.path)
 	if err != nil {
 		return err
 	}
-	defer jsonFile.Close()
-	byteValue, err := ioutil.ReadAll(jsonFile)
+	defer func() {
+		_ = yamlFile.Close()
+	}()
+	byteValue, err := ioutil.ReadAll(yamlFile)
 	if err != nil {
 		return err
 	}
