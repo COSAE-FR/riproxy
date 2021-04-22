@@ -1,6 +1,7 @@
 package domains
 
 import (
+	"fmt"
 	"strings"
 )
 
@@ -8,7 +9,7 @@ func domainSegmenter(path string, start int) (segment string, next int) {
 	if len(path) == 0 || start < 0 || start > len(path)-1 {
 		return "", -1
 	}
-	if start == 0 {
+	if start == 0 && path[0] != '.' {
 		start = len(path)
 	}
 	end := strings.LastIndexByte(path[:start], '.')
@@ -18,48 +19,82 @@ func domainSegmenter(path string, start int) (segment string, next int) {
 	return path[end+1 : start], end
 }
 
-type Node struct {
+type DomainTree interface {
+	Put(key string)
+	Get(key string) bool
+	Dump() string
+}
+
+type node struct {
 	andChildren bool
-	children    map[string]*Node
+	children    map[string]*node
+	formatter   func(string) string
 }
 
-func New() *Node {
-	return &Node{}
+func New() DomainTree {
+	return &node{
+		formatter: strings.ToLower,
+	}
 }
 
-func (trie *Node) Put(key string) {
-	node := trie
+func NewFromList(list []string) DomainTree {
+	if list != nil && len(list) > 0 {
+		node := New()
+		for _, domain := range list {
+			node.Put(domain)
+		}
+		return node
+	}
+	return nil
+}
+
+func (trie *node) Put(key string) {
+	key = trie.formatter(key)
+	currentNode := trie
 	for part, i := domainSegmenter(key, 0); part != ""; part, i = domainSegmenter(key, i) {
-		if node.andChildren {
+		if currentNode.andChildren {
 			return
 		}
 		if part == "*" {
-			node.andChildren = true
-			node.children = nil
+			currentNode.andChildren = true
+			currentNode.children = nil
 			return
 		}
-		child, _ := node.children[part]
+		child, _ := currentNode.children[part]
 		if child == nil {
-			if node.children == nil {
-				node.children = map[string]*Node{}
+			if currentNode.children == nil {
+				currentNode.children = map[string]*node{}
 			}
-			child = New()
-			node.children[part] = child
+			child = &node{}
+			currentNode.children[part] = child
 		}
-		node = child
+		currentNode = child
 	}
 }
 
-func (trie *Node) Get(key string) bool {
-	node := trie
+func (trie *node) Get(key string) bool {
+	key = trie.formatter(key)
+	currentNode := trie
 	for part, i := domainSegmenter(key, 0); part != ""; part, i = domainSegmenter(key, i) {
-		if len(part) > 0 && node.andChildren {
+		if len(part) > 0 && currentNode.andChildren {
 			return true
 		}
-		node = node.children[part]
-		if node == nil {
+		currentNode = currentNode.children[part]
+		if currentNode == nil {
 			return false
 		}
 	}
-	return node.children == nil && !node.andChildren
+	return currentNode.children == nil && !currentNode.andChildren
+}
+
+func (trie *node) Dump() string {
+	result := ""
+	currentNode := trie
+	if currentNode.children != nil {
+		for name, n := range currentNode.children {
+			result += fmt.Sprintf("%s: is wildcard: %v", name, n.andChildren)
+			result += fmt.Sprintf("\n %s", n.Dump())
+		}
+	}
+	return result
 }

@@ -51,7 +51,7 @@ func New(cfg Config) (*Daemon, error) {
 			"ip":        iface.BindIP.String(),
 			"port":      iface.BindPort,
 		})
-		srv, err := server.New(iface, logger)
+		srv, err := server.New(iface, &config.Global, logger)
 		if err != nil {
 			return &daemon, err
 		}

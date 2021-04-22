@@ -10,6 +10,7 @@ require (
 	github.com/erikdubbelboer/gspt v0.0.0-20201015204752-6cb2489021da // indirect
 	github.com/ogier/pflag v0.0.1 // indirect
 	github.com/sirupsen/logrus v1.8.1
+	golang.org/x/net v0.0.0-20210420210106-798c2154c571
 	gopkg.in/alecthomas/kingpin.v2 v2.2.6 // indirect
 	gopkg.in/hlandau/configurable.v1 v1.0.1 // indirect
 	gopkg.in/hlandau/easyconfig.v1 v1.0.17

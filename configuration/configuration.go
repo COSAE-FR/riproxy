@@ -2,6 +2,7 @@ package configuration
 
 import (
 	"encoding/json"
+	"github.com/COSAE-FR/riproxy/domains"
 	"github.com/COSAE-FR/riproxy/utils"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
@@ -60,10 +61,12 @@ type InterfaceConfig struct {
 	InterfaceNetworkDirect bool        `yaml:"direct" json:"direct"`
 	Networks               []net.IPNet `yaml:"-" json:"-"`
 	Regexp                 []string
+	BlockListString        []string `yaml:"block" json:"block"`
+	BlockList              domains.DomainTree
 	ReverseProxy           map[string]ReverseConfig `yaml:"reverse_proxy" json:"reverse_proxy"`
 }
 
-func (i *InterfaceConfig) check(log *log.Entry) error {
+func (i *InterfaceConfig) check(global GlobalConfig, log *log.Entry) error {
 	interfaceIP, err := utils.GetIPForInterface(i.Name)
 	if err != nil {
 		log.Errorf("cannot get interface ip: %s'%s'", i.Name, err)
@@ -117,11 +120,34 @@ func (i *InterfaceConfig) check(log *log.Entry) error {
 		}
 	}
 	i.ReverseProxy = proxies
+	if global.BlockByIDN {
+		i.BlockList = domains.NewIDNAFromList(i.BlockListString)
+	} else {
+		i.BlockList = domains.NewFromList(i.BlockListString)
+	}
+	i.BlockListString = nil
+	return nil
+}
+
+type GlobalConfig struct {
+	BlockByIDN      bool     `yaml:"block_by_idn" json:"block_by_idn"`
+	BlockListString []string `yaml:"block" json:"block"`
+	BlockList       domains.DomainTree
+}
+
+func (c *GlobalConfig) check() error {
+	if c.BlockByIDN {
+		c.BlockList = domains.NewIDNAFromList(c.BlockListString)
+	} else {
+		c.BlockList = domains.NewFromList(c.BlockListString)
+	}
+	c.BlockListString = nil
 	return nil
 }
 
 type Configuration struct {
 	Logging       LoggingConfig
+	Global        GlobalConfig `yaml:"global" json:"global"`
 	Interfaces    []InterfaceConfig
 	Log           *log.Entry `yaml:"-" json:"-"`
 	logFileWriter *os.File
@@ -204,7 +230,7 @@ func (c *Configuration) readYaml() error {
 func (c *Configuration) check() error {
 	var interfaces []InterfaceConfig
 	for _, i := range c.Interfaces {
-		err := i.check(c.Log)
+		err := i.check(c.Global, c.Log)
 		if err != nil {
 			c.Log.Errorf("error in %s configuration", i.Name)
 		}
