@@ -102,7 +102,7 @@ func (d Server) Stop() error {
 	return err
 }
 
-func New(iface configuration.InterfaceConfig, logger *log.Entry) (*Server, error) {
+func New(iface configuration.InterfaceConfig, global *configuration.GlobalConfig, logger *log.Entry) (*Server, error) {
 	la, err := net.ResolveTCPAddr("tcp4", fmt.Sprintf("%s:%d", iface.BindIP, iface.BindPort))
 	if err != nil {
 		logger.Errorf("cannot parse bind address for %s", iface.Name)
@@ -157,7 +157,7 @@ func New(iface configuration.InterfaceConfig, logger *log.Entry) (*Server, error
 		svr.ReverseProxies[name] = *proxy
 	}
 	if iface.EnableProxy {
-		svr.Proxy, err = NewProxy(iface, logger)
+		svr.Proxy, err = NewProxy(iface, global, logger)
 		if err != nil {
 			logger.Errorf("cannot create HTTP Proxy server: %s", err)
 			return nil, err

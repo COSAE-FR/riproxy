@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/COSAE-FR/riproxy/configuration"
+	"github.com/COSAE-FR/riproxy/domains"
 	"github.com/COSAE-FR/riproxy/utils"
 	"github.com/elazarl/goproxy"
 	log "github.com/sirupsen/logrus"
@@ -13,8 +14,30 @@ import (
 	"time"
 )
 
+func addBlockList(proxy *goproxy.ProxyHttpServer, message string, list domains.DomainTree, logger *log.Entry) *goproxy.ProxyHttpServer {
+	proxy.OnRequest(domains.DstHostIsIn(list)).DoFunc(func(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
+		ip, port := utils.GetConnection(ctx.Req.RemoteAddr)
+		logger.WithFields(log.Fields{
+			"src":        ip.String(),
+			"src_port":   port,
+			"method":     ctx.Req.Method,
+			"uri_path":   ctx.Req.URL.Path,
+			"url":        ctx.Req.URL.String(),
+			"user_agent": ctx.Req.Header.Get("User-Agent"),
+			"referrer":   ctx.Req.Header.Get("Referer"),
+			"action":     "block",
+			"status":     http.StatusForbidden,
+		}).Error(message)
+		return req, goproxy.NewResponse(req,
+			goproxy.ContentTypeText, http.StatusForbidden,
+			message)
+	})
+	return proxy
+}
+
 type ProxyServer struct {
 	Interface configuration.InterfaceConfig
+	Global    *configuration.GlobalConfig
 	Listener  *net.TCPListener
 	Http      *http.Server
 	Log       *log.Entry
@@ -44,24 +67,34 @@ func (p ProxyServer) Stop() error {
 	return nil
 }
 
-func NewProxy(iface configuration.InterfaceConfig, logger *log.Entry) (*ProxyServer, error) {
+func NewProxy(iface configuration.InterfaceConfig, global *configuration.GlobalConfig, logger *log.Entry) (*ProxyServer, error) {
 	proxyLogger := logger.WithFields(log.Fields{
 		"component": "proxy",
 		"ip":        iface.ProxyIP.String(),
 		"port":      iface.ProxyPort,
 	})
 	proxy := goproxy.NewProxyHttpServer()
+
+	// Add interface domain block list
+	if iface.BlockList != nil {
+		proxy = addBlockList(proxy, "Blocked by interface policy", iface.BlockList, proxyLogger)
+	}
+
+	// Add global domain block list
+	if global != nil && global.BlockList != nil {
+		proxy = addBlockList(proxy, "Blocked by global policy", global.BlockList, proxyLogger)
+	}
 	proxy.OnResponse().DoFunc(func(resp *http.Response, ctx *goproxy.ProxyCtx) *http.Response {
 		ip, port := utils.GetConnection(ctx.Req.RemoteAddr)
 		requestLogger := proxyLogger.WithFields(log.Fields{
-			"src":             ip.String(),
-			"src_port":        port,
-			"http_method":     ctx.Req.Method,
-			"uri_path":        ctx.Req.URL.Path,
-			"url":             ctx.Req.URL.String(),
-			"http_user_agent": ctx.Req.Header.Get("User-Agent"),
-			"http_referrer":   ctx.Req.Header.Get("Referer"),
-			"action":          "pass",
+			"src":        ip.String(),
+			"src_port":   port,
+			"method":     ctx.Req.Method,
+			"uri_path":   ctx.Req.URL.Path,
+			"url":        ctx.Req.URL.String(),
+			"user_agent": ctx.Req.Header.Get("User-Agent"),
+			"referrer":   ctx.Req.Header.Get("Referer"),
+			"action":     "pass",
 		})
 		if ctx.Resp != nil {
 			requestLogger = requestLogger.WithFields(log.Fields{
@@ -90,16 +123,16 @@ func NewProxy(iface configuration.InterfaceConfig, logger *log.Entry) (*ProxySer
 			url = fmt.Sprintf("https:%s", url)
 		}
 		requestLogger := proxyLogger.WithFields(log.Fields{
-			"src":             ip.String(),
-			"src_port":        port,
-			"http_method":     ctx.Req.Method,
-			"uri_path":        ctx.Req.URL.Path,
-			"url":             url,
-			"dest":            destHost,
-			"dest_port":       destPort,
-			"http_user_agent": ctx.Req.Header.Get("User-Agent"),
-			"http_referrer":   ctx.Req.Header.Get("Referer"),
-			"action":          "tunnel",
+			"src":        ip.String(),
+			"src_port":   port,
+			"method":     ctx.Req.Method,
+			"uri_path":   ctx.Req.URL.Path,
+			"url":        url,
+			"dest":       destHost,
+			"dest_port":  destPort,
+			"user_agent": ctx.Req.Header.Get("User-Agent"),
+			"referrer":   ctx.Req.Header.Get("Referer"),
+			"action":     "tunnel",
 		})
 		requestLogger.Info("Connect request")
 		return goproxy.OkConnect, host
@@ -117,6 +150,7 @@ func NewProxy(iface configuration.InterfaceConfig, logger *log.Entry) (*ProxySer
 	}
 	proxyServer := ProxyServer{
 		Interface: iface,
+		Global:    global,
 		Log:       proxyLogger,
 		Proxy:     proxy,
 		Listener:  listener,
