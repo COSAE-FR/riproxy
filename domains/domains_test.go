@@ -7,21 +7,30 @@ import (
 
 func TestSimpleDomain(t *testing.T) {
 	tree := New()
-	tree.Put("test.example.com")
+	tree.Put("test.exampLe.com")
 	if found := tree.Get("test.example.com"); found == false {
 		t.Fatalf("Cannot find domain %s", "test.example.com")
 	}
-	if found := tree.Get("lol.test.example.com"); found == true {
+	if found := tree.Get("test.example.com."); found == false {
+		t.Fatalf("Cannot find domain %s", "test.example.com.")
+	}
+	if found := tree.Get("sub.test.example.com"); found == true {
 		t.Fatalf("Found domain %s", "lol.test.example.com")
+	}
+	if found := tree.Get("sub.test.example.com."); found == true {
+		t.Fatalf("Found domain %s", "lol.test.example.com.")
 	}
 	if found := tree.Get("example.com"); found == true {
 		t.Fatalf("Found domain %s", "example.com")
+	}
+	if found := tree.Get("example.com."); found == true {
+		t.Fatalf("Found domain %s", "example.com.")
 	}
 }
 
 func TestWildcardDomain(t *testing.T) {
 	tree := New()
-	tree.Put("*.example.com")
+	tree.Put("*.exampLe.com")
 	if found := tree.Get("test.example.com"); found == false {
 		t.Fatalf("Cannot find domain %s", "test.example.com")
 	}
@@ -35,7 +44,7 @@ func TestWildcardDomain(t *testing.T) {
 
 func TestIDNASimpleDomain(t *testing.T) {
 	tree := NewIDNA()
-	tree.Put("test.example.com")
+	tree.Put("test.exampLe.com")
 	if found := tree.Get("test.example.com"); found == false {
 		t.Fatalf("Cannot find domain %s", "test.example.com")
 	}
@@ -49,7 +58,7 @@ func TestIDNASimpleDomain(t *testing.T) {
 
 func TestIDNAWildcardDomain(t *testing.T) {
 	tree := NewIDNA()
-	tree.Put("*.example.com")
+	tree.Put("*.exampLe.com")
 	if found := tree.Get("test.example.com"); found == false {
 		t.Fatalf("Cannot find domain %s", "test.example.com")
 	}
@@ -77,11 +86,11 @@ func TestIDNA(t *testing.T) {
 
 var letters = []rune("aàbcdefghiîjklmnoöpqrstuùvwxyzAÀBCDEFGHIÎJKLMNOÖPQRSTUVWXYZ")
 var pathKeys [1000]string // random .paths.of.parts keys
-const partsPerKey = 3     // (e.g. .a.b.c)
-const bytesPerPart = 10
+const partsPerKey = 5     // (e.g. .a.b.c)
+const bytesPerPart = 15
 
 func randSeq(n int) string {
-	b := make([]rune, n)
+	b := make([]rune, rand.Intn(n)+2)
 	for i := range b {
 		b[i] = letters[rand.Intn(len(letters))]
 	}

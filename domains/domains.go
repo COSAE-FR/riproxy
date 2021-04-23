@@ -9,7 +9,7 @@ func domainSegmenter(path string, start int) (segment string, next int) {
 	if len(path) == 0 || start < 0 || start > len(path)-1 {
 		return "", -1
 	}
-	if start == 0 && path[0] != '.' {
+	if start == 0 {
 		start = len(path)
 	}
 	end := strings.LastIndexByte(path[:start], '.')
@@ -17,6 +17,16 @@ func domainSegmenter(path string, start int) (segment string, next int) {
 		return path[:start], -1
 	}
 	return path[end+1 : start], end
+}
+
+func trimDots(s string) string {
+	if len(s) > 0 && s[0] == '.' {
+		s = s[1:]
+	}
+	if len(s) > 0 && s[len(s)-1] == '.' {
+		s = s[:len(s)-1]
+	}
+	return s
 }
 
 type DomainTree interface {
@@ -49,6 +59,7 @@ func NewFromList(list []string) DomainTree {
 }
 
 func (trie *node) Put(key string) {
+	key = trimDots(key)
 	key = trie.formatter(key)
 	currentNode := trie
 	for part, i := domainSegmenter(key, 0); part != ""; part, i = domainSegmenter(key, i) {
@@ -73,12 +84,13 @@ func (trie *node) Put(key string) {
 }
 
 func (trie *node) Get(key string) bool {
-	key = trie.formatter(key)
+	key = trimDots(key)
 	currentNode := trie
 	for part, i := domainSegmenter(key, 0); part != ""; part, i = domainSegmenter(key, i) {
 		if len(part) > 0 && currentNode.andChildren {
 			return true
 		}
+		part = trie.formatter(part)
 		currentNode = currentNode.children[part]
 		if currentNode == nil {
 			return false
