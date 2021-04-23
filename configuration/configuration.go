@@ -130,9 +130,11 @@ func (i *InterfaceConfig) check(global GlobalConfig, log *log.Entry) error {
 }
 
 type GlobalConfig struct {
-	BlockByIDN      bool     `yaml:"block_by_idn" json:"block_by_idn"`
-	BlockListString []string `yaml:"block" json:"block"`
-	BlockList       domains.DomainTree
+	BlockByIDN            bool     `yaml:"block_by_idn" json:"block_by_idn"`
+	BlockListString       []string `yaml:"block" json:"block"`
+	BlockList             domains.DomainTree
+	ConnectAllowHighPorts bool `yaml:"connect_allow_high_ports" json:"connect_allow_high_ports"`
+	ConnectAllowLowPorts  bool `yaml:"connect_allow_low_ports" json:"connect_allow_low_ports"`
 }
 
 func (c *GlobalConfig) check() error {

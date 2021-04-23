@@ -10,6 +10,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -35,6 +36,29 @@ func addBlockList(proxy *goproxy.ProxyHttpServer, message string, list domains.D
 			message)
 	})
 	return proxy
+}
+
+func connectTestPort(portString string, global *configuration.GlobalConfig) bool {
+	if global == nil { // Allow if no global options
+		return true
+	}
+	if portString == "443" {
+		return true
+	}
+	port, err := strconv.ParseUint(portString, 10, 16)
+	if err != nil { // Block if cannot parse port
+		return false
+	}
+	if port == 443 {
+		return true
+	}
+	if !global.ConnectAllowHighPorts && port > 1024 {
+		return false
+	}
+	if !global.ConnectAllowLowPorts && port <= 1024 {
+		return false
+	}
+	return true
 }
 
 type ProxyServer struct {
@@ -136,6 +160,10 @@ func NewProxy(iface configuration.InterfaceConfig, global *configuration.GlobalC
 			"user_agent": ctx.Req.Header.Get("User-Agent"),
 			"action":     "tunnel",
 		})
+		if !connectTestPort(destPort, global) {
+			requestLogger.WithField("action", "block").Errorf("Connect port %s not allowed", destPort)
+			return goproxy.RejectConnect, host
+		}
 		requestLogger.Info("Connect request")
 		return goproxy.OkConnect, host
 	})
