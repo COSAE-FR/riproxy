@@ -18,15 +18,17 @@ func addBlockList(proxy *goproxy.ProxyHttpServer, message string, list domains.D
 	proxy.OnRequest(domains.DstHostIsIn(list)).DoFunc(func(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
 		ip, port := utils.GetConnection(ctx.Req.RemoteAddr)
 		logger.WithFields(log.Fields{
-			"src":        ip.String(),
-			"src_port":   port,
-			"method":     ctx.Req.Method,
-			"uri_path":   ctx.Req.URL.Path,
-			"url":        ctx.Req.URL.String(),
-			"user_agent": ctx.Req.Header.Get("User-Agent"),
-			"referrer":   ctx.Req.Header.Get("Referer"),
-			"action":     "block",
-			"status":     http.StatusForbidden,
+			"src":          ip.String(),
+			"src_port":     port,
+			"method":       ctx.Req.Method,
+			"url":          ctx.Req.URL.String(),
+			"user_agent":   ctx.Req.Header.Get("User-Agent"),
+			"referrer":     ctx.Req.Header.Get("Referer"),
+			"action":       "block",
+			"status":       http.StatusForbidden,
+			"bytes_in":     ctx.Req.ContentLength,
+			"bytes_out":    len(message),
+			"content_type": ctx.Req.Header.Get("Content-Type"),
 		}).Error(message)
 		return req, goproxy.NewResponse(req,
 			goproxy.ContentTypeText, http.StatusForbidden,
@@ -87,18 +89,20 @@ func NewProxy(iface configuration.InterfaceConfig, global *configuration.GlobalC
 	proxy.OnResponse().DoFunc(func(resp *http.Response, ctx *goproxy.ProxyCtx) *http.Response {
 		ip, port := utils.GetConnection(ctx.Req.RemoteAddr)
 		requestLogger := proxyLogger.WithFields(log.Fields{
-			"src":        ip.String(),
-			"src_port":   port,
-			"method":     ctx.Req.Method,
-			"uri_path":   ctx.Req.URL.Path,
-			"url":        ctx.Req.URL.String(),
-			"user_agent": ctx.Req.Header.Get("User-Agent"),
-			"referrer":   ctx.Req.Header.Get("Referer"),
-			"action":     "pass",
+			"src":          ip.String(),
+			"src_port":     port,
+			"method":       ctx.Req.Method,
+			"url":          ctx.Req.URL.String(),
+			"user_agent":   ctx.Req.Header.Get("User-Agent"),
+			"referrer":     ctx.Req.Header.Get("Referer"),
+			"action":       "pass",
+			"bytes_in":     ctx.Req.ContentLength,
+			"content_type": ctx.Req.Header.Get("Content-Type"),
 		})
 		if ctx.Resp != nil {
 			requestLogger = requestLogger.WithFields(log.Fields{
-				"status": ctx.Resp.StatusCode,
+				"status":    ctx.Resp.StatusCode,
+				"bytes_out": ctx.Resp.ContentLength,
 			})
 		} else {
 			requestLogger.WithFields(log.Fields{
@@ -126,12 +130,10 @@ func NewProxy(iface configuration.InterfaceConfig, global *configuration.GlobalC
 			"src":        ip.String(),
 			"src_port":   port,
 			"method":     ctx.Req.Method,
-			"uri_path":   ctx.Req.URL.Path,
 			"url":        url,
 			"dest":       destHost,
 			"dest_port":  destPort,
 			"user_agent": ctx.Req.Header.Get("User-Agent"),
-			"referrer":   ctx.Req.Header.Get("Referer"),
 			"action":     "tunnel",
 		})
 		requestLogger.Info("Connect request")
