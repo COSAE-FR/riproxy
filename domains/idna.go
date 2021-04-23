@@ -23,18 +23,22 @@ func isASCIIandLower(s string) (string, bool) {
 		if !hasUpper {
 			return s, true
 		}
-		var b strings.Builder
-		b.Grow(len(s))
-		for i := 0; i < len(s); i++ {
-			c := s[i]
-			if 'A' <= c && c <= 'Z' {
-				c += lower
-			}
-			b.WriteByte(c)
-		}
-		return b.String(), true
+		return lowerAscii(s), true
 	}
 	return s, false
+}
+
+func lowerAscii(s string) string {
+	var b strings.Builder
+	b.Grow(len(s))
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if 'A' <= c && c <= 'Z' {
+			c += lower
+		}
+		b.WriteByte(c)
+	}
+	return b.String()
 }
 
 func idnaFormatter(key string) string {
@@ -45,14 +49,14 @@ func idnaFormatter(key string) string {
 		// Remove leading wildcard for IDN normalization
 		if len(key) > 1 && key[0] == '*' && key[1] == '.' {
 			idn, err = idna.Lookup.ToASCII(key[2:])
-			if err != nil {
+			if err == nil {
 				idn = "*." + idn
 			}
 		} else {
 			idn, err = idna.Lookup.ToASCII(key)
 		}
-		if err != nil {
-			return strings.ToLower(idn)
+		if err == nil {
+			return lowerAscii(idn)
 		}
 	}
 	return key
