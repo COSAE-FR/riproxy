@@ -3,7 +3,7 @@ module github.com/COSAE-FR/riproxy
 go 1.14
 
 require (
-	github.com/BurntSushi/toml v0.3.1 // indirect
+	github.com/COSAE-FR/riputils v1.0.3
 	github.com/alecthomas/template v0.0.0-20190718012654-fb15b899a751 // indirect
 	github.com/alecthomas/units v0.0.0-20210208195552-ff826a37aa15 // indirect
 	github.com/elazarl/goproxy v0.0.0-20210110162100-a92cc753f88e
