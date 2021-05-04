@@ -64,11 +64,6 @@ func (i *InterfaceConfig) check(name string, defaults *DefaultConfig, logger *lo
 	return nil
 }
 
-type LoggingConfig struct {
-	File  string `yaml:"file" json:"log"`
-	Level string
-}
-
 type MainConfiguration struct {
 	Logging       logging.Config             `yaml:"logging"`
 	Defaults      DefaultConfig              `yaml:"defaults"`
