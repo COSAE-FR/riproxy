@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/COSAE-FR/riproxy/configuration"
 	"github.com/COSAE-FR/riproxy/utils"
+	"github.com/COSAE-FR/riputils/arp"
 	log "github.com/sirupsen/logrus"
 	"net"
 	"net/http"
@@ -27,6 +28,7 @@ type Server struct {
 	WpadFile       string
 	ReverseProxies map[string]reverseProxy
 	Proxy          *ProxyServer
+	LogMacAddress  bool
 }
 
 func (d Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -39,6 +41,12 @@ func (d Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		"uri_path":    r.URL.Path,
 		"url":         r.URL.String(),
 	})
+	if d.LogMacAddress {
+		mac := arp.Search(ip.String())
+		if len(mac.MacAddress) > 0 {
+			logger = logger.WithField("src_mac", mac.MacAddress)
+		}
+	}
 	proxy, ok := d.ReverseProxies[r.Host]
 	if ok {
 		logger = logger.WithFields(log.Fields{
@@ -131,12 +139,13 @@ func (d Server) Stop() error {
 	return err
 }
 
-func New(iface configuration.InterfaceConfig, global *configuration.DefaultConfig, logger *log.Entry) (*Server, error) {
+func New(iface configuration.InterfaceConfig, global *configuration.DefaultConfig, logMacAddress bool, logger *log.Entry) (*Server, error) {
 	var err error
 
 	svr := Server{
-		Interface: iface,
-		Log:       logger,
+		Interface:     iface,
+		Log:           logger,
+		LogMacAddress: logMacAddress,
 	}
 
 	// Setup HTTP service
@@ -201,7 +210,7 @@ func New(iface configuration.InterfaceConfig, global *configuration.DefaultConfi
 
 	// Setup proxy service
 	if iface.Proxy.Enable {
-		svr.Proxy, err = NewProxy(iface, global, logger)
+		svr.Proxy, err = NewProxy(iface, global, svr.LogMacAddress, logger)
 		if err != nil {
 			logger.Errorf("cannot create HTTP Proxy server: %s", err)
 			return nil, err

@@ -34,6 +34,22 @@ The log level. Must be one of the following :
 
 The log file. Use stderr if not set.
 
+#### Log MAC address (log_mac_address)
+
+A boolean (true/false). If true, the HTTP services and Proxy services will log client MAC address.
+
+#### Log file max size (file_max_size)
+
+Maximum size in megabytes of the log file before it gets rotated.
+
+#### Log file max age (file_max_age)
+
+Maximum number of days to retain old log files.
+
+#### Log file max backups (file_max_backups)
+
+Maximum number of old log files to retain.
+
 ### Defaults (defaults)
 
 #### HTTP service (http)

@@ -71,9 +71,12 @@ func GetConfigurationFromPfSense(path string) (*MainConfiguration, error) {
 	pfProxy := pfConf.Packages.Riproxy
 
 	conf := &MainConfiguration{
-		Logging: logging.Config{
-			Level: pfProxy.LogLevel,
-			File:  defaultPfSenseLogFile,
+		Logging: LoggingConfig{
+			Config: logging.Config{
+				Level: pfProxy.LogLevel,
+				File:  defaultPfSenseLogFile,
+			},
+			LogMacAddress: true,
 		},
 	}
 

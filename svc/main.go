@@ -4,18 +4,25 @@ import (
 	"github.com/COSAE-FR/riproxy/configuration"
 	"github.com/COSAE-FR/riproxy/server"
 	"github.com/COSAE-FR/riproxy/utils"
+	"github.com/COSAE-FR/riputils/arp"
 	"github.com/COSAE-FR/riputils/common/logging"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/hlandau/easyconfig.v1"
 	"gopkg.in/hlandau/service.v2"
+	"time"
 )
 
 type Daemon struct {
 	Configuration *configuration.MainConfiguration
+	LogMacAddress bool
 	Servers       []server.Server
 }
 
 func (d Daemon) Start() error {
+	if d.LogMacAddress {
+		d.Configuration.Log.Debug("Starting ARP cache table auto refresh")
+		arp.AutoRefresh(time.Second * 60)
+	}
 	for _, svr := range d.Servers {
 		err := svr.Start()
 		if err != nil {
@@ -29,6 +36,10 @@ func (d Daemon) Stop() error {
 	for _, svr := range d.Servers {
 		_ = svr.Stop()
 	}
+	if d.LogMacAddress {
+		d.Configuration.Log.Debug("Stopping ARP cache table auto refresh")
+		arp.StopAutoRefresh()
+	}
 	return nil
 }
 
@@ -38,6 +49,7 @@ func New(cfg Config) (*Daemon, error) {
 		return nil, err
 	}
 	daemon := Daemon{Configuration: config}
+	daemon.LogMacAddress = config.Logging.LogMacAddress
 	for _, iface := range daemon.Configuration.Interfaces {
 		logger := daemon.Configuration.Log.WithFields(log.Fields{
 			"app":       utils.Name,
@@ -47,7 +59,7 @@ func New(cfg Config) (*Daemon, error) {
 			"ip":        iface.Ip.String(),
 			"port":      iface.Http.Port,
 		})
-		srv, err := server.New(iface, &config.Defaults, logger)
+		srv, err := server.New(iface, &config.Defaults, daemon.LogMacAddress, logger)
 		if err != nil {
 			return &daemon, err
 		}

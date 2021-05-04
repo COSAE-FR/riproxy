@@ -64,8 +64,13 @@ func (i *InterfaceConfig) check(name string, defaults *DefaultConfig, logger *lo
 	return nil
 }
 
+type LoggingConfig struct {
+	logging.Config
+	LogMacAddress bool `yaml:"log_mac_address"`
+}
+
 type MainConfiguration struct {
-	Logging       logging.Config             `yaml:"logging"`
+	Logging       LoggingConfig              `yaml:"logging"`
 	Defaults      DefaultConfig              `yaml:"defaults"`
 	Interfaces    map[string]InterfaceConfig `yaml:"interfaces"`
 	Log           *log.Entry                 `yaml:"-" json:"-"`
@@ -77,7 +82,7 @@ func (c *MainConfiguration) setUpLog() {
 	c.Logging.App = utils.Name
 	c.Logging.Version = utils.Version
 	c.Logging.Component = "config_loader"
-	c.Log = logging.SetupLog(c.Logging)
+	c.Log = logging.SetupLog(c.Logging.Config)
 }
 
 func (c *MainConfiguration) Read() error {
