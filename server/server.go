@@ -28,6 +28,7 @@ type Server struct {
 	WpadFile       string
 	ReverseProxies map[string]reverseProxy
 	Proxy          *ProxyServer
+	TransparentTls *TransparentTlsProxy
 	LogMacAddress  bool
 }
 
@@ -114,6 +115,9 @@ func (d *Server) Start() error {
 	}
 	if d.Interface.Proxy.Enable && d.Proxy != nil {
 		_ = d.Proxy.Start()
+		if d.Interface.Proxy.HttpsTransparentPort > 0 && d.TransparentTls != nil {
+			_ = d.TransparentTls.Start()
+		}
 	}
 	return nil
 }
@@ -134,6 +138,12 @@ func (d Server) Stop() error {
 		err = d.Proxy.Stop()
 		if err != nil {
 			d.Log.Errorf("proxy server shutdown error: %s", err)
+		}
+		if d.Interface.Proxy.HttpsTransparentPort > 0 && d.TransparentTls != nil {
+			err = d.TransparentTls.Stop()
+			if err != nil {
+				d.Log.Errorf("transparent HTTPS proxy server shutdown error: %s", err)
+			}
 		}
 	}
 	return err
@@ -214,6 +224,13 @@ func New(iface configuration.InterfaceConfig, global *configuration.DefaultConfi
 		if err != nil {
 			logger.Errorf("cannot create HTTP Proxy server: %s", err)
 			return nil, err
+		}
+		if iface.Proxy.HttpsTransparentPort > 0 {
+			svr.TransparentTls, err = NewTransparentTlsProxy(iface, svr.Proxy.Proxy, logMacAddress, logger)
+			if err != nil {
+				logger.Errorf("cannot create HTTPS Proxy server: %s", err)
+				return nil, err
+			}
 		}
 	}
 	return &svr, nil

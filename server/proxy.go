@@ -73,7 +73,7 @@ func IpIsBlocked(blockList []net.IP) goproxy.ReqConditionFunc {
 
 func addBlockList(proxy *goproxy.ProxyHttpServer, message string, list domains.DomainTree, logMacAddress bool, logger *log.Entry) *goproxy.ProxyHttpServer {
 	proxy.OnRequest(domains.DstHostIsIn(list)).DoFunc(func(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
-		prepareRequestLogger(logger, ctx, logMacAddress).Error(message)
+		prepareRequestLogger(logger, ctx, true, logMacAddress).Error(message)
 		return req, goproxy.NewResponse(req,
 			goproxy.ContentTypeText, http.StatusForbidden,
 			message)
@@ -116,7 +116,7 @@ var logHeaders = map[string]string{
 	"Content-Type": "content_type",
 }
 
-func prepareRequestLogger(logger *log.Entry, ctx *goproxy.ProxyCtx, logMacAddress bool) *log.Entry {
+func prepareRequestLogger(logger *log.Entry, ctx *goproxy.ProxyCtx, block bool, logMacAddress bool) *log.Entry {
 	ip, port := utils.GetConnection(ctx.Req.RemoteAddr)
 	requestLogger := logger.WithFields(log.Fields{
 		"src":      ip.String(),
@@ -126,6 +126,9 @@ func prepareRequestLogger(logger *log.Entry, ctx *goproxy.ProxyCtx, logMacAddres
 		"action":   "pass",
 		"bytes_in": ctx.Req.ContentLength,
 	})
+	if block {
+		requestLogger = requestLogger.WithField("action", "block")
+	}
 	if logMacAddress {
 		mac := arp.Search(ip.String())
 		if len(mac.MacAddress) > 0 {
@@ -187,10 +190,25 @@ func NewProxy(iface configuration.InterfaceConfig, global *configuration.Default
 	})
 	proxy := goproxy.NewProxyHttpServer()
 
+	// Transparent HTTP proxy
+	if iface.Proxy.HttpTransparent {
+		proxyLogger.Debug("Enabling HTTP transparent proxy handler")
+		proxy.NonproxyHandler = http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			if req.Host == "" {
+				ctx := goproxy.ProxyCtx{Proxy: proxy, Req: req}
+				prepareRequestLogger(proxyLogger, &ctx, true, logMacAddress).Error()
+				return
+			}
+			req.URL.Scheme = "http"
+			req.URL.Host = req.Host
+			proxy.ServeHTTP(w, req)
+		})
+	}
+
 	// Block if destination is a local service
 	if iface.Proxy.BlockLocalServices {
 		proxy.OnRequest(IpIsBlocked(iface.Proxy.LocalIps)).DoFunc(func(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
-			prepareRequestLogger(logger, ctx, logMacAddress).Error("Blocked: destination is not allowed: local service")
+			prepareRequestLogger(logger, ctx, true, logMacAddress).Error("Blocked: destination is not allowed: local service")
 			return req, goproxy.NewResponse(req,
 				goproxy.ContentTypeText, http.StatusForbidden,
 				"Blocked: destination is not allowed")
@@ -203,7 +221,7 @@ func NewProxy(iface configuration.InterfaceConfig, global *configuration.Default
 		allowedMethods[method] = true
 	}
 	proxy.OnRequest(MethodIsBlocked(allowedMethods)).DoFunc(func(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
-		prepareRequestLogger(logger, ctx, logMacAddress).Errorf("Blocked: method not allowed: %+v %+v", allowedMethods[ctx.Req.Method], allowedMethods)
+		prepareRequestLogger(logger, ctx, true, logMacAddress).Errorf("Blocked: method not allowed: %+v %+v", allowedMethods[ctx.Req.Method], allowedMethods)
 		return req, goproxy.NewResponse(req,
 			goproxy.ContentTypeText, http.StatusForbidden,
 			fmt.Sprintf("Blocked: method %s not allowed", ctx.Req.Method))
@@ -211,7 +229,7 @@ func NewProxy(iface configuration.InterfaceConfig, global *configuration.Default
 
 	// Block if dest port is not allowed
 	proxy.OnRequest(DstPortIsblocked(iface.Proxy)).DoFunc(func(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
-		prepareRequestLogger(logger, ctx, logMacAddress).Error("Blocked by host port policy")
+		prepareRequestLogger(logger, ctx, true, logMacAddress).Error("Blocked by host port policy")
 		return req, goproxy.NewResponse(req,
 			goproxy.ContentTypeText, http.StatusForbidden,
 			"Blocked by host port policy")
@@ -219,7 +237,7 @@ func NewProxy(iface configuration.InterfaceConfig, global *configuration.Default
 	// Block host IPs if configured
 	if iface.Proxy.BlockIPs {
 		proxy.OnRequest(DstHostIsIP()).DoFunc(func(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
-			prepareRequestLogger(logger, ctx, logMacAddress).Error("Blocked by host policy")
+			prepareRequestLogger(logger, ctx, true, logMacAddress).Error("Blocked by host policy")
 			return req, goproxy.NewResponse(req,
 				goproxy.ContentTypeText, http.StatusForbidden,
 				"Blocked by host policy")
@@ -236,7 +254,7 @@ func NewProxy(iface configuration.InterfaceConfig, global *configuration.Default
 		proxy = addBlockList(proxy, "Blocked by global policy", global.Proxy.BlockList, logMacAddress, proxyLogger)
 	}
 	proxy.OnResponse().DoFunc(func(resp *http.Response, ctx *goproxy.ProxyCtx) *http.Response {
-		requestLogger := prepareRequestLogger(proxyLogger, ctx, logMacAddress)
+		requestLogger := prepareRequestLogger(proxyLogger, ctx, false, logMacAddress)
 		if ctx.Resp == nil {
 			requestLogger.WithField("action", "error").Error("Proxy request: no response")
 			return resp

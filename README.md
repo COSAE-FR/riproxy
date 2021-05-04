@@ -3,6 +3,7 @@
 ## Features
 
 - Logging proxy (no HTTPS interception, use CONNECT method)
+- Transparent proxy for HTTP and HTTPS  
 - Simple HTTP-only reverse proxy
 - WPAD server
 
@@ -74,7 +75,7 @@ A list of networks in CIDR format or local interface names that will bypass the 
 
 ###### Listening interface is direct (direct)
 
-A boolean (true/false) that indicates if the WPAD service listening interface network should be added to the direct network list.
+A boolean (true/false). If true, the WPAD service listening interface network will be added to the direct network list.
 
 #### Proxy service (proxy)
 
@@ -86,7 +87,7 @@ Listening TCP port of the Proxy service.
 
 ##### Block by Internationalized Domain Name (block_by_idn)
 
-A boolean (true/false) that indicates if the list of blocked domains should be normalized in IDN format.
+A boolean (true/false). If true, the list of blocked domains will be normalized in IDN format.
 
 ##### List of blocked domains (block)
 
@@ -94,22 +95,35 @@ A list of FQDN to block.
 
 ##### Allow high TCP ports (allow_high_port)
 
-A boolean (true/false) that indicates if connections to TCP ports higher than 1024 should be allowed.
+A boolean (true/false). If true, connections to TCP ports higher than 1024 will be allowed.
 
 ##### Allow low TCP ports (allow_low_port)
 
-A boolean (true/false) that indicates if connections to TCP ports lower than (or equal to) 1024 should be allowed.
+A boolean (true/false). If true, connections to TCP ports lower than (or equal to) 1024 will be allowed.
 
 HTTP connections through port 80 will always be allowed.
 HTTPS connections through port 443 will always be allowed.
 
 ##### Block raw IPs (block_ips)
 
-A boolean (true/false) that indicates if direct connection to IP (not FQDNs) will be allowed.
+A boolean (true/false). If tue, direct connection to IP (not FQDNs) will be allowed.
 
 ##### Block local services (block_local_service)
 
-Block access to servers exposed by the local computer through the proxy service.
+A boolean (true/false). If tue, connections to services exposed by the local computer through the proxy service will be blocked.
+
+##### Enable transparent HTTP proxy (http_transparent)
+
+A boolean (true/false). If enabled, the proxy service can handle normal HTTP requests and proxy them.
+
+You have to redirect these requests to the proxy port (with firewall rules).
+
+##### Enable transparent HTTPS proxy (https_transparent_port)
+
+A port number. If this port is set, the proxy service will redirect HTTPS requests (TLS client hello) to the proxy service with a CONNECT method.
+The client must use SNI in its request.
+
+You have to redirect these requests to the port (with firewall rules).
 
 ##### Allowed HTTP methods (allowed_methods)
 
@@ -287,6 +301,19 @@ If this setting is false and the default is true, the resulting setting is true.
 ##### Block local services (block_local_service)
 
 Block access to servers exposed by the local computer through the proxy service.
+
+##### Enable transparent HTTP proxy (http_transparent)
+
+A boolean (true/false). If enabled, the proxy service can handle normal HTTP requests and proxy them.
+
+You have to redirect these requests to the proxy port (with firewall rules).
+
+##### Enable transparent HTTPS proxy (https_transparent_port)
+
+A port number. If this port is set, the proxy service will redirect HTTPS requests (TLS client hello) to the proxy service with a CONNECT method.
+The client must use SNI in its request.
+
+You have to redirect these requests to the port (with firewall rules).
 
 ##### Allowed HTTP methods (allowed_methods)
 

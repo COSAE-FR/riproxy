@@ -9,16 +9,18 @@ import (
 )
 
 type ProxyConfig struct {
-	Port               uint16             `yaml:"port,omitempty"`
-	BlockByIDN         bool               `yaml:"block_by_idn"`
-	BlockListString    []string           `yaml:"block"`
-	BlockList          domains.DomainTree `yaml:"-"`
-	AllowHighPorts     bool               `yaml:"allow_high_ports"`
-	AllowLowPorts      bool               `yaml:"allow_low_ports"`
-	BlockIPs           bool               `yaml:"block_ips"`
-	BlockLocalServices bool               `yaml:"block_local_services"`
-	LocalIps           []net.IP           `yaml:"-"`
-	AllowedMethods     []string           `yaml:"allowed_methods"`
+	Port                 uint16             `yaml:"port,omitempty"`
+	BlockByIDN           bool               `yaml:"block_by_idn"`
+	BlockListString      []string           `yaml:"block"`
+	BlockList            domains.DomainTree `yaml:"-"`
+	AllowHighPorts       bool               `yaml:"allow_high_ports"`
+	AllowLowPorts        bool               `yaml:"allow_low_ports"`
+	BlockIPs             bool               `yaml:"block_ips"`
+	BlockLocalServices   bool               `yaml:"block_local_services"`
+	LocalIps             []net.IP           `yaml:"-"`
+	AllowedMethods       []string           `yaml:"allowed_methods"`
+	HttpTransparent      bool               `yaml:"http_transparent"`
+	HttpsTransparentPort uint16             `yaml:"https_transparent_port"`
 }
 
 type InterfaceProxyConfig struct {
@@ -59,6 +61,12 @@ func (c *ProxyConfig) check(infos *interfaceInfo, defaults *DefaultConfig, logge
 		}
 		if !c.BlockLocalServices && defaults.Proxy.BlockLocalServices {
 			c.BlockLocalServices = true
+		}
+		if !c.HttpTransparent && defaults.Proxy.HttpTransparent {
+			c.HttpTransparent = true
+		}
+		if c.HttpsTransparentPort == 0 && defaults.Proxy.HttpsTransparentPort != 0 {
+			c.HttpsTransparentPort = defaults.Proxy.HttpsTransparentPort
 		}
 	}
 	if defaults != nil && c.BlockLocalServices {

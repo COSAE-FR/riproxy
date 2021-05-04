@@ -96,13 +96,15 @@ func GetConfigurationFromPfSense(path string) (*MainConfiguration, error) {
 			},
 		},
 		Proxy: ProxyConfig{
-			Port:               pfProxy.ProxyPort,
-			BlockByIDN:         bool(pfProxy.BlockByIdn),
-			AllowHighPorts:     bool(pfProxy.AllowHighPorts),
-			AllowLowPorts:      bool(pfProxy.AllowLowPorts),
-			BlockIPs:           bool(pfProxy.BlockIps),
-			BlockLocalServices: bool(pfProxy.BlockLocalServices),
-			BlockListString:    pfProxy.Block,
+			Port:                 pfProxy.ProxyPort,
+			BlockByIDN:           bool(pfProxy.BlockByIdn),
+			AllowHighPorts:       bool(pfProxy.AllowHighPorts),
+			AllowLowPorts:        bool(pfProxy.AllowLowPorts),
+			BlockIPs:             bool(pfProxy.BlockIps),
+			BlockLocalServices:   bool(pfProxy.BlockLocalServices),
+			BlockListString:      pfProxy.Block,
+			HttpTransparent:      bool(pfProxy.HttpTransparent),
+			HttpsTransparentPort: pfProxy.HttpsTransparentPort,
 		},
 	}
 
@@ -183,13 +185,15 @@ func GetConfigurationFromPfSense(path string) (*MainConfiguration, error) {
 		finalProxyConf := InterfaceProxyConfig{
 			Enable: bool(proxyConfig.Enable),
 			ProxyConfig: ProxyConfig{
-				Port:               proxyConfig.ProxyPort,
-				BlockByIDN:         bool(proxyConfig.BlockByIdn),
-				BlockListString:    proxyConfig.Block,
-				AllowHighPorts:     bool(proxyConfig.AllowHighPorts),
-				AllowLowPorts:      bool(proxyConfig.AllowLowPorts),
-				BlockIPs:           bool(proxyConfig.BlockIps),
-				BlockLocalServices: bool(proxyConfig.BlockLocalServices),
+				Port:                 proxyConfig.ProxyPort,
+				BlockByIDN:           bool(proxyConfig.BlockByIdn),
+				BlockListString:      proxyConfig.Block,
+				AllowHighPorts:       bool(proxyConfig.AllowHighPorts),
+				AllowLowPorts:        bool(proxyConfig.AllowLowPorts),
+				BlockIPs:             bool(proxyConfig.BlockIps),
+				BlockLocalServices:   bool(proxyConfig.BlockLocalServices),
+				HttpTransparent:      bool(proxyConfig.HttpTransparent),
+				HttpsTransparentPort: proxyConfig.HttpsTransparentPort,
 			},
 		}
 
