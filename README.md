@@ -53,79 +53,59 @@ Maximum number of old log files to retain.
 
 ### Defaults (defaults)
 
-#### HTTP service (http)
+#### Direct networks (direct_networks)
 
-Configures the default values for the HTTP service (WPAD and HTTP-only reverse proxy).
+A list of networks in CIDR format or local interface names that will bypass the proxy in the WPAD file and will be blocked by the proxy.
 
-##### Port (port)
-
-Listening TCP port of the HTTP service.
-
-##### WPAD (wpad)
-
-Configures the default values for the WPAD service.
-
-###### External Proxy (external_proxy)
-
-If an external proxy must be defined by the WPAD file, configure this key with a connection string: `IP or FQDN`:`port`
-
-###### Direct networks (direct_networks)
-
-A list of networks in CIDR format or local interface names that will bypass the proxy in the WPAD file.
-
-###### Listening interface is direct (direct)
+#### Listening interface is direct (direct)
 
 A boolean (true/false). If true, the WPAD service listening interface network will be added to the direct network list.
 
-#### Proxy service (proxy)
-
-Configures the default values for the Proxy service.
-
-##### Port (port)
+#### Port (port)
 
 Listening TCP port of the Proxy service.
 
-##### Block by Internationalized Domain Name (block_by_idn)
+#### Block by Internationalized Domain Name (block_by_idn)
 
 A boolean (true/false). If true, the list of blocked domains will be normalized in IDN format.
 
-##### List of blocked domains (block)
+#### List of blocked domains (block)
 
 A list of FQDN to block.
 
-##### Allow high TCP ports (allow_high_port)
+#### Allow high TCP ports (allow_high_port)
 
 A boolean (true/false). If true, connections to TCP ports higher than 1024 will be allowed.
 
-##### Allow low TCP ports (allow_low_port)
+#### Allow low TCP ports (allow_low_port)
 
 A boolean (true/false). If true, connections to TCP ports lower than (or equal to) 1024 will be allowed.
 
 HTTP connections through port 80 will always be allowed.
 HTTPS connections through port 443 will always be allowed.
 
-##### Block raw IPs (block_ips)
+#### Block raw IPs (block_ips)
 
 A boolean (true/false). If tue, direct connection to IP (not FQDNs) will be allowed.
 
-##### Block local services (block_local_service)
+#### Block local services (block_local_service)
 
 A boolean (true/false). If tue, connections to services exposed by the local computer through the proxy service will be blocked.
 
-##### Enable transparent HTTP proxy (http_transparent)
+#### Enable transparent HTTP proxy (http_transparent)
 
 A boolean (true/false). If enabled, the proxy service can handle normal HTTP requests and proxy them.
 
 You have to redirect these requests to the proxy port (with firewall rules).
 
-##### Enable transparent HTTPS proxy (https_transparent_port)
+#### Enable transparent HTTPS proxy (https_transparent_port)
 
 A port number. If this port is set, the proxy service will redirect HTTPS requests (TLS client hello) to the proxy service with a CONNECT method.
 The client must use SNI in its request.
 
 You have to redirect these requests to the port (with firewall rules).
 
-##### Allowed HTTP methods (allowed_methods)
+#### Allowed HTTP methods (allowed_methods)
 
 List of HTTP method allowed in proxy requests. If the CONNECT method is not allowed, no HTTPS connection will be allowed.
 
@@ -176,47 +156,30 @@ Map of configurations of listening interface.
 ```yaml
 - interfaces:
   eth0:
-    http:
-      port:80
-    proxy:
-      port: 3128
+    enable_proxy: true
+    port: 3128
+    enable_wpad: true
 ```
 
 #### Name of the interface (name)
 
 Name of the interface to listen on.
 
-#### HTTP service configuration (http)
-
-Configures the default values for the HTTP service (WPAD and HTTP-only reverse proxy).
-
-##### Port (port)
-
-Listening TCP port of the HTTP service.
-
-##### WPAD (wpad)
-
-Configures the WPAD service.
-
-###### Enable (enable)
+#### Enable WPAD (enable_wpad)
 
 A boolean (true/false) that indicates if the WPAD service is enabled on this interface.
 
-###### External Proxy (external_proxy)
-
-If an external proxy must be defined by the WPAD file, configure this key with a connection string: `IP or FQDN`:`port`
-
-###### Direct networks (direct_networks)
+#### Direct networks (direct_networks)
 
 A list of networks in CIDR format or local interface names that will bypass the proxy in the WPAD file.
 
 These networks will be added to the defaults if defined.
 
-###### Listening interface is direct (direct)
+#### Listening interface is direct (direct)
 
 A boolean (true/false) that indicates if the WPAD service listening interface network should be added to the direct network list.
 
-##### HTTP-only reverse proxies (reverse_proxies)
+#### HTTP-only reverse proxies (reverse_proxies)
 
 Associative array of host names and reverse proxy configuration that will listen on this interface.
 
@@ -228,19 +191,19 @@ reverse_proxies:
     source_interface: eth0
 ```
 
-###### Peer IP address (peer_ip)
+##### Peer IP address (peer_ip)
 
 The IP address of the destination IP.
 
-###### Peer TCP port (peer_port)
+##### Peer TCP port (peer_port)
 
 The destination port. The default port is 80.
 
-###### Source interface (source_interface)
+##### Source interface (source_interface)
 
 (Optional). The source interface of the server side connection.
 
-###### Allowed HTTP methods (allowed_methods)
+##### Allowed HTTP methods (allowed_methods)
 
 List of HTTP method allowed in requests.
 
@@ -255,35 +218,31 @@ The default allowed methods are :
 	OPTIONS,
 ```
 
-#### Proxy service (proxy)
-
-Configures the Proxy service.
-
-##### Enable (enable)
+#### Enable Proxy (enable_proxy)
 
 A boolean (true/false) that indicates if the Proxy service is enabled on this interface.
 
-##### Port (port)
+#### Port (port)
 
 Listening TCP port of the Proxy service.
 
-##### Block by Internationalized Domain Name (block_by_idn)
+#### Block by Internationalized Domain Name (block_by_idn)
 
 A boolean (true/false) that indicates if the list of blocked domains should be normalized in IDN format.
 
-##### List of blocked domains (block)
+#### List of blocked domains (block)
 
 A list of FQDN to block.
 
 These domains will be added to the defaults if defined.
 
-##### Allow high TCP ports (allow_high_port)
+#### Allow high TCP ports (allow_high_port)
 
 A boolean (true/false) that indicates if connections to TCP ports higher than 1024 should be allowed.
 
 If this setting is false and the default is true, the resulting setting is true.
 
-##### Allow low TCP ports (allow_low_port)
+#### Allow low TCP ports (allow_low_port)
 
 A boolean (true/false) that indicates if connections to TCP ports lower than (or equal to) 1024 should be allowed.
 
@@ -292,30 +251,30 @@ HTTPS connections through port 443 will always be allowed.
 
 If this setting is false and the default is true, the resulting setting is true.
 
-##### Block raw IPs (block_ips)
+#### Block raw IPs (block_ips)
 
 A boolean (true/false) that indicates if direct connection to IP (not FQDNs) will be allowed.
 
 If this setting is false and the default is true, the resulting setting is true.
 
-##### Block local services (block_local_service)
+#### Block local services (block_local_service)
 
 Block access to servers exposed by the local computer through the proxy service.
 
-##### Enable transparent HTTP proxy (http_transparent)
+#### Enable transparent HTTP proxy (http_transparent)
 
 A boolean (true/false). If enabled, the proxy service can handle normal HTTP requests and proxy them.
 
 You have to redirect these requests to the proxy port (with firewall rules).
 
-##### Enable transparent HTTPS proxy (https_transparent_port)
+#### Enable transparent HTTPS proxy (https_transparent_port)
 
 A port number. If this port is set, the proxy service will redirect HTTPS requests (TLS client hello) to the proxy service with a CONNECT method.
 The client must use SNI in its request.
 
 You have to redirect these requests to the port (with firewall rules).
 
-##### Allowed HTTP methods (allowed_methods)
+#### Allowed HTTP methods (allowed_methods)
 
 List of HTTP method allowed in proxy requests. If the CONNECT method is not allowed, no HTTPS connection will be allowed.
 

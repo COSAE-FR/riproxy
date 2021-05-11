@@ -13,25 +13,32 @@ import (
 )
 
 type DefaultConfig struct {
-	Http  HttpConfig  `yaml:"http"`
-	Proxy ProxyConfig `yaml:"proxy"`
+	Direct LocalNetworks `yaml:",inline"`
+	Proxy  ProxyConfig   `yaml:",inline"`
 }
 
 func (c *DefaultConfig) check(logger *log.Entry) error {
 	if err := c.Proxy.check(nil, nil, logger); err != nil {
 		return err
 	}
-	if err := c.Http.check(nil, nil, logger); err != nil {
+	if err := c.Direct.check(nil, nil, logger); err != nil {
 		return err
 	}
 	return nil
 }
 
 type InterfaceConfig struct {
-	Name  string               `yaml:"-"`
-	Ip    net.IP               `yaml:"-" json:"-"`
-	Http  InterfaceHttpConfig  `yaml:"http"`
-	Proxy InterfaceProxyConfig `yaml:"proxy"`
+	Name           string                        `yaml:"-"`
+	Ip             net.IP                        `yaml:"-"`
+	EnableProxy    bool                          `yaml:"enable_proxy"`
+	Proxy          ProxyConfig                   `yaml:",inline"`
+	Direct         LocalNetworks                 `yaml:",inline"`
+	EnableWpad     bool                          `yaml:"enable_wpad"`
+	ReverseProxies map[string]ReverseProxyConfig `yaml:"reverse_proxies"`
+}
+
+func (i InterfaceConfig) ShouldStartHttp() bool {
+	return i.EnableWpad || len(i.ReverseProxies) > 0
 }
 
 func (i *InterfaceConfig) check(name string, defaults *DefaultConfig, logger *log.Entry) error {
@@ -53,27 +60,41 @@ func (i *InterfaceConfig) check(name string, defaults *DefaultConfig, logger *lo
 		logger.Errorf("cannot prepare Proxy service: %s'%s'", name, err)
 		return err
 	}
-	if i.Proxy.Enable {
+	if i.EnableProxy {
 		infos.InterfaceProxy = fmt.Sprintf("%s:%d", i.Ip.String(), i.Proxy.Port)
 	}
-	err = i.Http.check(infos, defaults, logger)
+
+	// Check the direct networks
+	err = i.Direct.check(infos, defaults, logger)
 	if err != nil {
-		logger.Errorf("cannot prepare HTTP service: %s'%s'", name, err)
+		logger.Errorf("cannot prepare direct networks: %s'%s'", name, err)
 		return err
 	}
+
+	// Check our reverse proxy hosts
+	proxies := make(map[string]ReverseProxyConfig)
+	if len(i.ReverseProxies) > 0 {
+		for name, config := range i.ReverseProxies {
+			err = config.check(infos, defaults, logger)
+			if err == nil {
+				proxies[name] = config
+			}
+		}
+	}
+	i.ReverseProxies = proxies
 	return nil
 }
 
 type LoggingConfig struct {
-	logging.Config
-	LogMacAddress bool `yaml:"log_mac_address"`
+	logging.Config `yaml:",inline"`
+	LogMacAddress  bool `yaml:"log_mac_address"`
 }
 
 type MainConfiguration struct {
 	Logging       LoggingConfig              `yaml:"logging"`
 	Defaults      DefaultConfig              `yaml:"defaults"`
 	Interfaces    map[string]InterfaceConfig `yaml:"interfaces"`
-	Log           *log.Entry                 `yaml:"-" json:"-"`
+	Log           *log.Entry                 `yaml:"-"`
 	logFileWriter *os.File
 	path          string
 }
@@ -82,6 +103,8 @@ func (c *MainConfiguration) setUpLog() {
 	c.Logging.App = utils.Name
 	c.Logging.Version = utils.Version
 	c.Logging.Component = "config_loader"
+	c.Logging.FileMaxSize = 80
+	c.Logging.FileMaxBackups = 10
 	c.Log = logging.SetupLog(c.Logging.Config)
 }
 

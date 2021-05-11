@@ -47,12 +47,13 @@ func NewTransparentTlsProxy(iface configuration.InterfaceConfig, proxy *goproxy.
 }
 
 func (d *TransparentTlsProxy) Start() error {
+	d.Log.Debug("starting HTTPS transparent proxy")
 	go d.run()
 	return nil
 }
 
 func (d *TransparentTlsProxy) Stop() error {
-	d.Log.Debug("Stopping HTTPS transparent proxy")
+	d.Log.Debug("stopping HTTPS transparent proxy")
 	close(d.stop)
 	if err := d.listener.Close(); err != nil {
 		d.Log.Errorf("Cannot close listener: %s", err)

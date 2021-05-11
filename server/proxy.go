@@ -27,7 +27,7 @@ func DstHostIsIP() goproxy.ReqConditionFunc {
 	}
 }
 
-func DstPortIsblocked(configuration configuration.InterfaceProxyConfig) goproxy.ReqConditionFunc {
+func DstPortIsblocked(configuration configuration.ProxyConfig) goproxy.ReqConditionFunc {
 	return func(req *http.Request, ctx *goproxy.ProxyCtx) bool {
 		hostParts := strings.Split(ctx.Req.Host, ":")
 		destPort := "80"
@@ -60,12 +60,15 @@ func MethodIsBlocked(allowed map[string]bool) goproxy.ReqConditionFunc {
 	}
 }
 
-func IpIsBlocked(blockList []net.IP) goproxy.ReqConditionFunc {
+func IpIsBlocked(blockList []net.IP, blockNetList []net.IPNet) goproxy.ReqConditionFunc {
 	return func(req *http.Request, ctx *goproxy.ProxyCtx) bool {
 		hostParts := strings.Split(ctx.Req.Host, ":")
 		destIP, err := net.ResolveIPAddr("ip", hostParts[0])
 		if err == nil {
-			return connectTestDestIp(destIP.IP, blockList)
+			if connectTestDestIp(destIP.IP, blockList) {
+				return true
+			}
+			return connectTestDestSubnet(destIP.IP, blockNetList)
 		}
 		return false
 	}
@@ -81,7 +84,7 @@ func addBlockList(proxy *goproxy.ProxyHttpServer, message string, list domains.D
 	return proxy
 }
 
-func connectTestPort(portString string, configuration configuration.InterfaceProxyConfig) bool {
+func connectTestPort(portString string, configuration configuration.ProxyConfig) bool {
 	if portString == "443" { // Always allow port 443 for CONNECT
 		return true
 	}
@@ -104,6 +107,15 @@ func connectTestPort(portString string, configuration configuration.InterfacePro
 func connectTestDestIp(destIp net.IP, blockList []net.IP) bool {
 	for _, blocked := range blockList {
 		if destIp.Equal(blocked) {
+			return true
+		}
+	}
+	return false
+}
+
+func connectTestDestSubnet(destIp net.IP, blockList []net.IPNet) bool {
+	for _, blocked := range blockList {
+		if blocked.Contains(destIp) {
 			return true
 		}
 	}
@@ -160,7 +172,7 @@ type ProxyServer struct {
 }
 
 func (p ProxyServer) Start() error {
-	p.Log.Debug("starting HTTP Proxy daemon")
+	p.Log.Debug("starting Proxy daemon")
 	go func() {
 		err := p.Http.Serve(p.Listener)
 		if err != http.ErrServerClosed {
@@ -171,13 +183,13 @@ func (p ProxyServer) Start() error {
 }
 
 func (p ProxyServer) Stop() error {
-	p.Log.Debugf("stopping HTTP Proxy daemon")
+	p.Log.Debugf("stopping Proxy daemon")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := p.Http.Shutdown(ctx); err != nil {
 		return err
 	} else {
-		p.Log.Debug("gracefully stopped")
+		p.Log.Debug("Proxy daemon gracefully stopped")
 	}
 	return nil
 }
@@ -196,7 +208,7 @@ func NewProxy(iface configuration.InterfaceConfig, global *configuration.Default
 		proxy.NonproxyHandler = http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 			if req.Host == "" {
 				ctx := goproxy.ProxyCtx{Proxy: proxy, Req: req}
-				prepareRequestLogger(proxyLogger, &ctx, true, logMacAddress).Error()
+				prepareRequestLogger(proxyLogger, &ctx, true, logMacAddress).Error("Cannot handle HTTP 1.0 in transparent mode")
 				return
 			}
 			req.URL.Scheme = "http"
@@ -205,15 +217,18 @@ func NewProxy(iface configuration.InterfaceConfig, global *configuration.Default
 		})
 	}
 
+	var blockedIps []net.IP
+
 	// Block if destination is a local service
 	if iface.Proxy.BlockLocalServices {
-		proxy.OnRequest(IpIsBlocked(iface.Proxy.LocalIps)).DoFunc(func(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
-			prepareRequestLogger(logger, ctx, true, logMacAddress).Error("Blocked: destination is not allowed: local service")
-			return req, goproxy.NewResponse(req,
-				goproxy.ContentTypeText, http.StatusForbidden,
-				"Blocked: destination is not allowed")
-		})
+		blockedIps = iface.Proxy.LocalIps
 	}
+	proxy.OnRequest(IpIsBlocked(blockedIps, iface.Direct.Networks)).DoFunc(func(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
+		prepareRequestLogger(logger, ctx, true, logMacAddress).Error("Blocked: destination is not allowed: local destination")
+		return req, goproxy.NewResponse(req,
+			goproxy.ContentTypeText, http.StatusForbidden,
+			"Blocked: destination is not allowed")
+	})
 
 	// Block if method is not allowed
 	allowedMethods := make(map[string]bool, len(iface.Proxy.AllowedMethods))
@@ -291,13 +306,17 @@ func NewProxy(iface configuration.InterfaceConfig, global *configuration.Default
 				requestLogger = requestLogger.WithField("src_mac", mac.MacAddress)
 			}
 		}
-		if iface.Proxy.BlockLocalServices {
-			destIP, err := net.ResolveIPAddr("ip", destHost)
-			if err == nil {
+		destIP, err := net.ResolveIPAddr("ip", destHost)
+		if err == nil {
+			if iface.Proxy.BlockLocalServices {
 				if connectTestDestIp(destIP.IP, iface.Proxy.LocalIps) {
 					requestLogger.WithField("action", "block").Error("Blocked: destination is not allowed: local service")
 					return goproxy.RejectConnect, host
 				}
+			}
+			if connectTestDestSubnet(destIP.IP, iface.Direct.Networks) {
+				requestLogger.WithField("action", "block").Error("Blocked: destination is not allowed: local subnet")
+				return goproxy.RejectConnect, host
 			}
 		}
 		if !allowedMethods[ctx.Req.Method] {

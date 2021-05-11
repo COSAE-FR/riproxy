@@ -3,6 +3,7 @@ package server
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"github.com/COSAE-FR/riproxy/configuration"
 	"github.com/COSAE-FR/riproxy/utils"
@@ -68,7 +69,7 @@ func (d Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		proxy.Proxy.ServeHTTP(w, r)
 		return
 	}
-	if d.Interface.Http.Wpad.Enable {
+	if d.Interface.EnableWpad {
 		if r.Method == "GET" {
 			if WpadPaths[r.URL.Path] {
 				logger.WithFields(log.Fields{
@@ -104,16 +105,20 @@ func (d Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (d *Server) Start() error {
-	if d.Interface.Http.Enable && d.Http != nil {
-		d.Log.Debug("starting HTTP daemon")
+	if d.Interface.ShouldStartHttp() && d.Http != nil {
+		if d.Listener == nil {
+			d.Log.Error("Mandatory listener not ready")
+			return errors.New("missing listener")
+		}
 		go func() {
+			d.Log.Debug("starting HTTP daemon")
 			err := d.Http.Serve(d.Listener)
 			if err != http.ErrServerClosed {
 				d.Log.Debugf("HTTP server stopped with error: %s", err)
 			}
 		}()
 	}
-	if d.Interface.Proxy.Enable && d.Proxy != nil {
+	if d.Interface.EnableProxy && d.Proxy != nil {
 		_ = d.Proxy.Start()
 		if d.Interface.Proxy.HttpsTransparentPort > 0 && d.TransparentTls != nil {
 			_ = d.TransparentTls.Start()
@@ -124,17 +129,17 @@ func (d *Server) Start() error {
 
 func (d Server) Stop() error {
 	var err error
-	if d.Interface.Http.Enable && d.Http != nil {
+	if d.Interface.ShouldStartHttp() && d.Http != nil {
 		d.Log.Debugf("stopping HTTP daemon")
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		if err = d.Http.Shutdown(ctx); err != nil {
 			d.Log.Errorf("HTTP server shutdown error: %v", err)
 		} else {
-			d.Log.Debug("HTTP server gracefully stopped")
+			d.Log.Debug("HTTP daemon gracefully stopped")
 		}
 	}
-	if d.Interface.Proxy.Enable && d.Proxy != nil {
+	if d.Interface.EnableProxy && d.Proxy != nil {
 		err = d.Proxy.Stop()
 		if err != nil {
 			d.Log.Errorf("proxy server shutdown error: %s", err)
@@ -159,9 +164,10 @@ func New(iface configuration.InterfaceConfig, global *configuration.DefaultConfi
 	}
 
 	// Setup HTTP service
-	if iface.Http.Enable {
+	if iface.ShouldStartHttp() {
+		logger.Debug("Creating handler HTTP")
 		svr.Http = &http.Server{Handler: &svr}
-		la, err := net.ResolveTCPAddr("tcp4", fmt.Sprintf("%s:%d", iface.Ip, iface.Http.Port))
+		la, err := net.ResolveTCPAddr("tcp4", fmt.Sprintf("%s:%d", iface.Ip.String(), configuration.DefaultBindPort))
 		if err != nil {
 			logger.Errorf("cannot parse bind address for %s", iface.Name)
 			return nil, err
@@ -173,7 +179,7 @@ func New(iface configuration.InterfaceConfig, global *configuration.DefaultConfi
 		}
 
 		// Setup WPAD service
-		if iface.Http.Wpad.Enable {
+		if iface.EnableWpad {
 			buf := new(bytes.Buffer)
 			err = wpadFile.Execute(buf, iface)
 			if err != nil {
@@ -184,8 +190,8 @@ func New(iface configuration.InterfaceConfig, global *configuration.DefaultConfi
 		}
 
 		// Setup reverse proxy service
-		svr.ReverseProxies = make(map[string]reverseProxy, len(iface.Http.ReverseProxies))
-		for name, config := range iface.Http.ReverseProxies {
+		svr.ReverseProxies = make(map[string]reverseProxy, len(iface.ReverseProxies))
+		for name, config := range iface.ReverseProxies {
 			targetUrl, _ := url.Parse(fmt.Sprintf("http://%s:%d/", config.PeerIp.String(), config.PeerPort))
 			srcAddr := &net.TCPAddr{
 				IP: config.SourceIP,
@@ -219,7 +225,7 @@ func New(iface configuration.InterfaceConfig, global *configuration.DefaultConfi
 	}
 
 	// Setup proxy service
-	if iface.Proxy.Enable {
+	if iface.EnableProxy {
 		svr.Proxy, err = NewProxy(iface, global, svr.LogMacAddress, logger)
 		if err != nil {
 			logger.Errorf("cannot create HTTP Proxy server: %s", err)

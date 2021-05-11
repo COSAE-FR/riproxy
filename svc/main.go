@@ -20,10 +20,11 @@ type Daemon struct {
 
 func (d Daemon) Start() error {
 	if d.LogMacAddress {
-		d.Configuration.Log.Debug("Starting ARP cache table auto refresh")
+		d.Configuration.Log.WithField("component", "arp_cache").Debug("Starting ARP cache table auto refresh")
 		arp.AutoRefresh(time.Second * 60)
 	}
 	for _, svr := range d.Servers {
+		svr := svr
 		err := svr.Start()
 		if err != nil {
 			return err
@@ -37,7 +38,7 @@ func (d Daemon) Stop() error {
 		_ = svr.Stop()
 	}
 	if d.LogMacAddress {
-		d.Configuration.Log.Debug("Stopping ARP cache table auto refresh")
+		d.Configuration.Log.WithField("component", "arp_cache").Debug("Stopping ARP cache table auto refresh")
 		arp.StopAutoRefresh()
 	}
 	return nil
@@ -57,7 +58,7 @@ func New(cfg Config) (*Daemon, error) {
 			"component": "server",
 			"interface": iface.Name,
 			"ip":        iface.Ip.String(),
-			"port":      iface.Http.Port,
+			"port":      configuration.DefaultBindPort,
 		})
 		srv, err := server.New(iface, &config.Defaults, daemon.LogMacAddress, logger)
 		if err != nil {

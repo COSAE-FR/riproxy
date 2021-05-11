@@ -1,6 +1,7 @@
 package configuration
 
 import (
+	"fmt"
 	"github.com/COSAE-FR/riproxy/domains"
 	"github.com/COSAE-FR/riputils/common"
 	log "github.com/sirupsen/logrus"
@@ -10,6 +11,7 @@ import (
 
 type ProxyConfig struct {
 	Port                 uint16             `yaml:"port,omitempty"`
+	Connection           string             `yaml:"-"`
 	BlockByIDN           bool               `yaml:"block_by_idn"`
 	BlockListString      []string           `yaml:"block"`
 	BlockList            domains.DomainTree `yaml:"-"`
@@ -23,19 +25,6 @@ type ProxyConfig struct {
 	HttpsTransparentPort uint16             `yaml:"https_transparent_port"`
 }
 
-type InterfaceProxyConfig struct {
-	Enable bool
-	ProxyConfig
-}
-
-func (c *InterfaceProxyConfig) check(infos *interfaceInfo, defaults *DefaultConfig, logger *log.Entry) error {
-	if !c.Enable {
-		logger.Infof("Not configuring Proxy service on interface %s: disabled by configuration", infos.Name)
-		return nil
-	}
-	return c.ProxyConfig.check(infos, defaults, logger)
-}
-
 func (c *ProxyConfig) check(infos *interfaceInfo, defaults *DefaultConfig, logger *log.Entry) error {
 	if c.Port == 0 {
 		if defaults != nil {
@@ -47,6 +36,9 @@ func (c *ProxyConfig) check(infos *interfaceInfo, defaults *DefaultConfig, logge
 		}
 	}
 	if defaults != nil {
+		if infos != nil {
+			c.Connection = fmt.Sprintf("%s:%d", infos.Ip.IP.String(), c.Port)
+		}
 		if !c.BlockByIDN && defaults.Proxy.BlockByIDN {
 			c.BlockByIDN = true
 		}

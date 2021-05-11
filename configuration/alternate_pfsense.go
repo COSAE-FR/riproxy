@@ -5,6 +5,7 @@ package configuration
 import (
 	"encoding/xml"
 	"errors"
+	pfsense2 "github.com/COSAE-FR/riproxy/configuration/pfsense"
 	"github.com/COSAE-FR/riputils/common/logging"
 	"github.com/COSAE-FR/riputils/pfsense/configuration"
 	"github.com/COSAE-FR/riputils/pfsense/configuration/sections/packages"
@@ -13,6 +14,16 @@ import (
 	"net"
 	"path/filepath"
 )
+
+func DeleteEmptyString(s []string) []string {
+	var r []string
+	for _, str := range s {
+		if str != "" {
+			r = append(r, str)
+		}
+	}
+	return r
+}
 
 func NewAlternateConfiguration(path string) (*MainConfiguration, error) {
 	if filepath.Ext(path) == ".xml" {
@@ -25,13 +36,13 @@ func NewAlternateConfiguration(path string) (*MainConfiguration, error) {
 	return nil, errors.New("configuration not compatible")
 }
 
-const defaultPfSenseLogFile = "/var/log/riproxy.log"
+const defaultPfSenseLogFile = "/var/log/riproxy/proxy.log"
 
 type proxyPackageConfiguration struct {
 	packages.BasePackageConfig
-	Riproxy      *packages.RiproxyConfig       `xml:"riproxy>config"`
-	RiproxyHttp  []packages.RiproxyHttpConfig  `xml:"riproxyhttp>config"`
-	RiproxyProxy []packages.RiproxyProxyConfig `xml:"riproxyproxy>config"`
+	Riproxy        *pfsense2.RiproxyConfig              `xml:"riproxy>config"`
+	RiproxyService []pfsense2.RiproxyServiceConfig      `xml:"riproxyservice>config"`
+	RiproxyReverse []pfsense2.RiproxyReverseProxyConfig `xml:"riproxyreverse>config"`
 }
 
 type ripSenseConfiguration struct {
@@ -86,14 +97,20 @@ func GetConfigurationFromPfSense(path string) (*MainConfiguration, error) {
 		"component": "pfsense_loader",
 	})
 
+	var tlsTransparentPort uint16
+	if pfProxy.HttpsTransparent {
+		if pfProxy.HttpsTransparentPort > 0 {
+			tlsTransparentPort = pfProxy.HttpsTransparentPort
+		} else {
+			tlsTransparentPort = DefaultTlsPort
+		}
+	}
+
+	// Default configuration
 	conf.Defaults = DefaultConfig{
-		Http: HttpConfig{
-			Port: defaultBindPort,
-			Wpad: WpadConfig{
-				Proxy:                  "",
-				NetworkStrings:         resolvePfSenseInterfaces(pfConf, pfProxy.DirectInterfaces, logger),
-				InterfaceNetworkDirect: bool(pfProxy.InterfaceDirect),
-			},
+		Direct: LocalNetworks{
+			NetworkStrings:         resolvePfSenseInterfaces(pfConf, pfProxy.DirectInterfaces, logger),
+			InterfaceNetworkDirect: bool(pfProxy.InterfaceDirect),
 		},
 		Proxy: ProxyConfig{
 			Port:                 pfProxy.ProxyPort,
@@ -102,25 +119,64 @@ func GetConfigurationFromPfSense(path string) (*MainConfiguration, error) {
 			AllowLowPorts:        bool(pfProxy.AllowLowPorts),
 			BlockIPs:             bool(pfProxy.BlockIps),
 			BlockLocalServices:   bool(pfProxy.BlockLocalServices),
-			BlockListString:      pfProxy.Block,
+			BlockListString:      DeleteEmptyString(pfProxy.Block),
 			HttpTransparent:      bool(pfProxy.HttpTransparent),
-			HttpsTransparentPort: pfProxy.HttpsTransparentPort,
+			HttpsTransparentPort: tlsTransparentPort,
 		},
 	}
 
 	conf.Interfaces = map[string]InterfaceConfig{}
-	for _, httpConfig := range pfConf.Packages.RiproxyHttp {
 
-		// Get physical interface
-		iface, err := pfConf.GetPhysicalInterfaceName(httpConfig.Interface)
-		if err != nil {
-			logger.Errorf("cannot get physical interface for %s in HTTP config", httpConfig.Interface)
+	for _, proxyConfig := range pfConf.Packages.RiproxyService {
+		if !proxyConfig.EnableProxy {
 			continue
 		}
+		// Get physical interface
+		iface, err := pfConf.GetPhysicalInterfaceName(proxyConfig.Interface)
+		if err != nil {
+			logger.Errorf("cannot get physical interface for %s in proxy config", proxyConfig.Interface)
+		}
+
+		var tlsTransparentPort uint16
+		if proxyConfig.HttpsTransparent {
+			if proxyConfig.HttpsTransparentPort > 0 {
+				tlsTransparentPort = proxyConfig.HttpsTransparentPort
+			} else {
+				tlsTransparentPort = DefaultTlsPort
+			}
+		}
+		finalProxyConf := ProxyConfig{
+			Port:                 proxyConfig.ProxyPort,
+			BlockByIDN:           bool(proxyConfig.BlockByIdn),
+			BlockListString:      DeleteEmptyString(proxyConfig.Block),
+			AllowHighPorts:       bool(proxyConfig.AllowHighPorts),
+			AllowLowPorts:        bool(proxyConfig.AllowLowPorts),
+			BlockIPs:             bool(proxyConfig.BlockIps),
+			BlockLocalServices:   bool(proxyConfig.BlockLocalServices),
+			HttpTransparent:      bool(proxyConfig.HttpTransparent),
+			HttpsTransparentPort: tlsTransparentPort,
+		}
+
+		interfaceConfig, ok := conf.Interfaces[iface]
+		if !ok {
+			interfaceConfig.Name = iface
+			interfaceConfig.ReverseProxies = make(map[string]ReverseProxyConfig)
+		}
+		interfaceConfig.Proxy = finalProxyConf
+		interfaceConfig.EnableProxy = bool(proxyConfig.EnableProxy)
+
+		// Honor global WPAD setting
+		enableWpad := false
+		if pfProxy.EnableWpad {
+			enableWpad = true
+		} else {
+			enableWpad = bool(proxyConfig.EnableWpad)
+		}
+		interfaceConfig.EnableWpad = enableWpad
 
 		// Prepare direct interfaces
 		var directs []string
-		for _, direct := range httpConfig.DirectInterfaces {
+		for _, direct := range proxyConfig.DirectInterfaces {
 			directIface, err := pfConf.GetPhysicalInterfaceName(direct)
 			if err != nil {
 				logger.Errorf("cannot get physical interface for %s in HTTP direct interfaces config", direct)
@@ -128,82 +184,47 @@ func GetConfigurationFromPfSense(path string) (*MainConfiguration, error) {
 			}
 			directs = append(directs, directIface)
 		}
+		interfaceConfig.Direct.NetworkStrings = directs
+		interfaceConfig.Direct.InterfaceNetworkDirect = bool(proxyConfig.InterfaceDirect)
 
-		// Prepare reverse proxies
-		reverseProxies := make(map[string]ReverseProxyConfig)
-		for _, reverseProxy := range httpConfig.ReverseProxies {
-			srcIface := ""
-			if len(reverseProxy.Interface) > 0 {
-				srcIface, err = pfConf.GetPhysicalInterfaceName(reverseProxy.Interface)
-				if err != nil {
-					logger.Errorf("cannot get physical interface for %s in reverse proxy config", reverseProxy.Interface)
-					srcIface = ""
-				}
-			}
-			peerIP := net.ParseIP(reverseProxy.PeerIP)
-			if peerIP == nil {
-				logger.Error("cannot configure reverse reverseProxy without peer IP")
-				continue
-			}
-			reverseProxies[reverseProxy.Host] = ReverseProxyConfig{
-				PeerIp:          peerIP,
-				PeerPort:        reverseProxy.PeerPort,
-				SourceInterface: srcIface,
-			}
-		}
-
-		proxyAddress := ""
-		if httpConfig.ExternalProxy {
-			proxyAddress = httpConfig.ExternalProxyAddress
-		}
-
-		conf.Interfaces[iface] = InterfaceConfig{
-			Name: iface,
-			Http: InterfaceHttpConfig{
-				Enable: bool(httpConfig.Enable),
-				HttpConfig: HttpConfig{
-					Port: defaultBindPort,
-					Wpad: WpadConfig{
-						Enable:                 bool(httpConfig.Enable),
-						Proxy:                  proxyAddress,
-						NetworkStrings:         directs,
-						InterfaceNetworkDirect: bool(httpConfig.InterfaceDirect),
-					},
-				},
-				ReverseProxies: reverseProxies,
-			},
-		}
+		conf.Interfaces[iface] = interfaceConfig
 	}
 
-	for _, proxyConfig := range pfConf.Packages.RiproxyProxy {
-		// Get physical interface
-		iface, err := pfConf.GetPhysicalInterfaceName(proxyConfig.Interface)
-		if err != nil {
-			logger.Errorf("cannot get physical interface for %s in proxy config", proxyConfig.Interface)
+	for _, reverseConfig := range pfConf.Packages.RiproxyReverse {
+		if !reverseConfig.Enable {
+			continue
 		}
 
-		finalProxyConf := InterfaceProxyConfig{
-			Enable: bool(proxyConfig.Enable),
-			ProxyConfig: ProxyConfig{
-				Port:                 proxyConfig.ProxyPort,
-				BlockByIDN:           bool(proxyConfig.BlockByIdn),
-				BlockListString:      proxyConfig.Block,
-				AllowHighPorts:       bool(proxyConfig.AllowHighPorts),
-				AllowLowPorts:        bool(proxyConfig.AllowLowPorts),
-				BlockIPs:             bool(proxyConfig.BlockIps),
-				BlockLocalServices:   bool(proxyConfig.BlockLocalServices),
-				HttpTransparent:      bool(proxyConfig.HttpTransparent),
-				HttpsTransparentPort: proxyConfig.HttpsTransparentPort,
-			},
+		// Get physical interface
+		iface, err := pfConf.GetPhysicalInterfaceName(reverseConfig.Interface)
+		if err != nil {
+			logger.Errorf("cannot get physical interface for %s in HTTP config", reverseConfig.Interface)
+			continue
+		}
+		peerIP := net.ParseIP(reverseConfig.PeerIP)
+		if peerIP == nil {
+			logger.Error("cannot configure reverse reverseProxy without peer IP")
+			continue
 		}
 
 		interfaceConfig, ok := conf.Interfaces[iface]
 		if !ok {
 			interfaceConfig.Name = iface
+			interfaceConfig.ReverseProxies = make(map[string]ReverseProxyConfig)
 		}
-		interfaceConfig.Proxy = finalProxyConf
-
-		conf.Interfaces[iface] = interfaceConfig
+		srcIface := ""
+		if len(reverseConfig.Interface) > 0 {
+			srcIface, err = pfConf.GetPhysicalInterfaceName(reverseConfig.Interface)
+			if err != nil {
+				logger.Errorf("cannot get physical interface for %s in reverse proxy config", reverseConfig.Interface)
+				srcIface = ""
+			}
+		}
+		interfaceConfig.ReverseProxies[reverseConfig.Host] = ReverseProxyConfig{
+			PeerIp:          peerIP,
+			PeerPort:        reverseConfig.PeerPort,
+			SourceInterface: srcIface,
+		}
 	}
 
 	err = conf.check()

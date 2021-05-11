@@ -6,7 +6,8 @@ import (
 )
 
 const defaultProxyPort = 3128
-const defaultBindPort = 80
+const DefaultTlsPort = 3129
+const DefaultBindPort = 80
 
 // Known HTTP methods
 // Associated boolean is "default for proxy service"

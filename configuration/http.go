@@ -8,34 +8,15 @@ import (
 	"strings"
 )
 
-type WpadConfig struct {
-	Enable                 bool
-	Proxy                  string      `yaml:"external_proxy"`
+type LocalNetworks struct {
 	NetworkStrings         []string    `yaml:"direct_networks"`
-	InterfaceNetworkDirect bool        `yaml:"direct" json:"direct"`
-	Networks               []net.IPNet `yaml:"-" json:"-"`
-	Regexp                 []string
+	InterfaceNetworkDirect bool        `yaml:"direct"`
+	Networks               []net.IPNet `yaml:"-"`
 }
 
-func (c *WpadConfig) check(infos *interfaceInfo, defaults *DefaultConfig, logger *log.Entry) error {
-	if !c.Enable && infos != nil { // if infos is nil, we are configuring the default configuration
-		return nil
-	}
-	if len(c.Proxy) == 0 { // No external proxy defined for this interface or default  WPAD service
-		if infos != nil && len(infos.InterfaceProxy) > 0 { // We are configuring an interface WPAD service with an internal proxy
-			c.Proxy = infos.InterfaceProxy
-		} else if defaults != nil && len(defaults.Http.Wpad.Proxy) > 0 {
-			c.Proxy = defaults.Http.Wpad.Proxy
-		}
-	}
-	if c.Proxy == "self" && infos != nil && len(infos.InterfaceProxy) > 0 { // Special value "self"
-		c.Proxy = infos.InterfaceProxy
-	}
-	if infos != nil && len(c.Proxy) == 0 { // If this is an interface configuration and no proxy is defined
-		c.Enable = false
-	}
-	if defaults != nil && defaults.Http.Wpad.Networks != nil { // Copy the default networks
-		c.Networks = defaults.Http.Wpad.Networks[:]
+func (c *LocalNetworks) check(infos *interfaceInfo, defaults *DefaultConfig, logger *log.Entry) error {
+	if defaults != nil && defaults.Direct.Networks != nil { // Copy the default networks
+		c.Networks = defaults.Direct.Networks[:]
 	}
 	for _, netString := range c.NetworkStrings {
 		_, network, err := net.ParseCIDR(netString)
@@ -52,42 +33,21 @@ func (c *WpadConfig) check(infos *interfaceInfo, defaults *DefaultConfig, logger
 		}
 		c.Networks = appendNetwork(c.Networks, *network)
 	}
-	if defaults != nil && defaults.Http.Wpad.InterfaceNetworkDirect { // If the defaults is to append network interface
+	if defaults != nil && defaults.Direct.InterfaceNetworkDirect { // If the defaults is to append network interface
 		c.InterfaceNetworkDirect = true
 	}
 	if infos != nil && c.InterfaceNetworkDirect {
 		c.Networks = appendNetwork(c.Networks, *infos.Ip)
 	}
-	return nil
-}
-
-type HttpConfig struct {
-	Port uint16 `yaml:"port"`
-	Wpad WpadConfig
-}
-
-func (c *HttpConfig) check(infos *interfaceInfo, defaults *DefaultConfig, logger *log.Entry) error {
-	if c.Port == 0 {
-		if defaults != nil {
-			if defaults.Http.Port > 0 {
-				c.Port = defaults.Http.Port
-			} else {
-				c.Port = defaultBindPort
-			}
-		}
-	}
-	err := c.Wpad.check(infos, defaults, logger)
-	if err != nil {
-		return err
-	}
+	c.NetworkStrings = nil
 	return nil
 }
 
 type ReverseProxyConfig struct {
 	PeerIp          net.IP   `yaml:"peer_ip"`
 	PeerPort        uint16   `yaml:"peer_port,omitempty"`
-	SourceInterface string   `yaml:"source_interface,omitempty" json:"source_interface"`
-	SourceIP        net.IP   `yaml:"-" json:"-"`
+	SourceInterface string   `yaml:"source_interface,omitempty"`
+	SourceIP        net.IP   `yaml:"-"`
 	AllowedMethods  []string `yaml:"allowed_methods"`
 }
 
@@ -104,7 +64,7 @@ func (c *ReverseProxyConfig) check(infos *interfaceInfo, defaults *DefaultConfig
 		c.SourceIP = interfaceIP.IP
 	}
 	if c.PeerPort == 0 {
-		c.PeerPort = defaultBindPort
+		c.PeerPort = DefaultBindPort
 	}
 	if len(c.AllowedMethods) > 0 {
 		var allowed []string
@@ -127,35 +87,6 @@ func (c *ReverseProxyConfig) check(infos *interfaceInfo, defaults *DefaultConfig
 			http.MethodDelete,
 			http.MethodOptions,
 		}
-	}
-	return nil
-}
-
-type InterfaceHttpConfig struct {
-	Enable bool `yaml:"-"`
-	HttpConfig
-	ReverseProxies map[string]ReverseProxyConfig `yaml:"reverse_proxies"`
-}
-
-func (c *InterfaceHttpConfig) check(infos *interfaceInfo, defaults *DefaultConfig, logger *log.Entry) error {
-	err := c.HttpConfig.check(infos, defaults, logger)
-	if err != nil {
-		return err
-	}
-	proxies := make(map[string]ReverseProxyConfig)
-	if len(c.ReverseProxies) > 0 {
-		for name, config := range c.ReverseProxies {
-			err = config.check(infos, defaults, logger)
-			if err == nil {
-				proxies[name] = config
-			}
-		}
-	}
-	c.ReverseProxies = proxies
-	if len(c.ReverseProxies) == 0 && !c.Wpad.Enable { // If not HTTP service is configured, disable HTTP service
-		c.Enable = false
-	} else {
-		c.Enable = true
 	}
 	return nil
 }

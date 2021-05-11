@@ -9,12 +9,12 @@ import (
 const WpadTemplate = `
 function FindProxyForURL(url, host) {
 	// No proxy for internal networks.
-	if (isPlainHostName(host){{range .Http.Wpad.Networks }} || isInNet(dnsResolve(host), "{{ .IP }}",  "{{ PrintMask .Mask }}"){{end}}) {
+	if (isPlainHostName(host){{range .Direct.Networks }} || isInNet(dnsResolve(host), "{{ .IP }}",  "{{ PrintMask .Mask }}"){{end}}) {
 		return "DIRECT";
 	}
 
 	// send to proxy
-	return "PROXY {{.Http.Wpad.Proxy}}";
+	return "PROXY {{.Proxy.Connection}}";
 }
 `
 
