@@ -52,10 +52,9 @@ type ReverseProxyConfig struct {
 }
 
 func (c *ReverseProxyConfig) check(infos *interfaceInfo, defaults *DefaultConfig, logger *log.Entry) error {
-	iface := infos.Name
 	c.SourceIP = infos.Ip.IP
 	if len(c.SourceInterface) > 0 {
-		iface = c.SourceInterface
+		iface := c.SourceInterface
 		interfaceIP, err := common.GetIPForInterface(iface)
 		if err != nil {
 			logger.Errorf("cannot get interface ip for: %s '%s'", iface, err)

@@ -1,3 +1,4 @@
+//go:build pfsense
 // +build pfsense
 
 package configuration
@@ -213,10 +214,10 @@ func GetConfigurationFromPfSense(path string) (*MainConfiguration, error) {
 			interfaceConfig.ReverseProxies = make(map[string]ReverseProxyConfig)
 		}
 		srcIface := ""
-		if len(reverseConfig.Interface) > 0 {
-			srcIface, err = pfConf.GetPhysicalInterfaceName(reverseConfig.Interface)
+		if len(reverseConfig.SourceInterface) > 0 {
+			srcIface, err = pfConf.GetPhysicalInterfaceName(reverseConfig.SourceInterface)
 			if err != nil {
-				logger.Errorf("cannot get physical interface for %s in reverse proxy config", reverseConfig.Interface)
+				logger.Errorf("cannot get physical interface for %s in reverse proxy config", reverseConfig.SourceInterface)
 				srcIface = ""
 			}
 		}
@@ -225,6 +226,7 @@ func GetConfigurationFromPfSense(path string) (*MainConfiguration, error) {
 			PeerPort:        reverseConfig.PeerPort,
 			SourceInterface: srcIface,
 		}
+		conf.Interfaces[iface] = interfaceConfig
 	}
 
 	err = conf.check()
