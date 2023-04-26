@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"strings"
 	"time"
 )
 
@@ -49,7 +50,12 @@ func (d Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			logger = logger.WithField("src_mac", mac.MacAddress)
 		}
 	}
-	proxy, ok := d.ReverseProxies[r.Host]
+	host := r.Host
+	hostParts := strings.Split(r.Host, ":")
+	if len(hostParts) > 1 {
+		host = hostParts[0]
+	}
+	proxy, ok := d.ReverseProxies[host]
 	if ok {
 		logger = logger.WithFields(log.Fields{
 			"component": "reverse",
