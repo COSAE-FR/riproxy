@@ -20,3 +20,5 @@ vendor/
 *.iml
 out
 gen
+
+dist/
